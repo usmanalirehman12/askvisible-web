@@ -1,0 +1,12 @@
+node_modules
+.next
+.env.local
+*.log
+.npm-cache
+.codex-dev.log
+.codex-dev-error.log
+.DS_Store
+.gstack/
+.agents/
+tsconfig.tsbuildinfo
+*.zip
