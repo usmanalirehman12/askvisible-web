@@ -54,6 +54,17 @@ button,input,textarea{font:inherit}button,a{cursor:pointer}a{text-decoration:non
 .button.small{padding:10px 15px}
 .button.ghost{background:var(--surface);color:var(--ink);border:1px solid var(--line);box-shadow:none}
 .button.outline{background:var(--surface);color:var(--ink);border:1px solid #dcd9e6;box-shadow:none}
+/* Landing page — pinned dark-navy base, ignores OS dark-mode vars */
+.landing{background:#0F172A;color:#F1F5F9}
+.landing .navlinks{color:#94A3B8}
+.landing .eyebrow{background:rgba(14,165,233,.12);border-color:rgba(14,165,233,.3);color:#7dd3fc}
+.landing .button.ghost{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.22);color:#F1F5F9;box-shadow:none}
+.landing .hero h1{color:#F1F5F9}
+.landing .hero-copy{color:#94A3B8}
+.landing .trustline{color:#94A3B8}
+.landing .float-card{background:#1E293B;border-color:#253352;color:#F1F5F9}
+.landing .float-card strong{color:#F1F5F9}
+.landing .float-card small{color:#94A3B8}
 .hero{text-align:center;padding-top:76px}
 .eyebrow,.kicker{font-size:12px;letter-spacing:1.4px;font-weight:800;color:var(--sky);display:inline-flex;align-items:center;gap:6px}
 .eyebrow{padding:7px 12px;border:1px solid #bae6fd;border-radius:99px;background:#f0f9ff}
@@ -101,10 +112,11 @@ button,input,textarea{font:inherit}button,a{cursor:pointer}a{text-decoration:non
 .float-icon svg{width:17px}
 .float-icon.green{background:var(--em-d);color:var(--em)}.float-icon.purple{background:var(--sky-d);color:var(--sky)}
 .float-card strong{font-size:12px;display:block}.float-card small{font-size:9px;color:var(--muted)}
-.engine-strip{border-block:1px solid var(--line);padding:27px;text-align:center}
-.engine-strip p{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1.2px;font-weight:700}
+/* Engine strip — light ice-blue (section 2: contrast with dark hero) */
+.engine-strip{background:#EFF6FF;color:#0F172A;padding:36px;text-align:center}
+.engine-strip p{color:#64748B;font-size:11px;text-transform:uppercase;letter-spacing:1.2px;font-weight:700}
 .engine-strip>div{display:flex;justify-content:center;gap:65px;margin-top:22px}
-.engine-strip span{display:flex;align-items:center;gap:9px;font-weight:600;color:var(--ink)}
+.engine-strip span{display:flex;align-items:center;gap:9px;font-weight:600;color:#1E293B}
 .engine-dot{width:25px;height:25px;border-radius:6px;display:grid;place-items:center;color:#fff;font-size:12px}
 .e0{background:#20201f}.e1{background:#4583eb}.e2{background:#1aa6a3}.e3{background:#d98345}
 .checker-section{padding:110px 0}
@@ -126,19 +138,23 @@ button,input,textarea{font:inherit}button,a{cursor:pointer}a{text-decoration:non
 .result-label{color:var(--em);font-size:12px;font-weight:700;display:flex;gap:5px}.result-label svg{width:16px}
 .quick-result h3{margin:6px 0;font:700 19px 'Outfit',system-ui}
 .quick-result p{margin:0;color:var(--muted);font-size:13px}
-.feature-section{background:var(--soft);padding:110px 0}
+/* Feature section — dark navy (section 3: back to dark) */
+.feature-section{background:#111827;padding:110px 0}
+.feature-section .kicker{color:#7dd3fc}
+.feature-section .section-heading h2{color:#F1F5F9}
+.feature-section .section-heading p{color:#94A3B8}
 .feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
-.feature-grid article{background:var(--surface);border:1px solid #e9e7ee;border-radius:14px;padding:28px;position:relative;overflow:hidden}
-.feature-no{position:absolute;right:22px;top:20px;font:700 12px 'Outfit',system-ui;color:#94A3B8}
-.feature-icon{width:44px;height:44px;background:var(--sky-d);color:var(--sky);display:grid;place-items:center;border-radius:10px}
+.feature-grid article{background:#192237;border:1px solid #1E2D45;border-radius:14px;padding:28px;position:relative;overflow:hidden;color:#94A3B8}
+.feature-no{position:absolute;right:22px;top:20px;font:700 12px 'Outfit',system-ui;color:#475569}
+.feature-icon{width:44px;height:44px;background:rgba(14,165,233,.15);color:#38BDF8;display:grid;place-items:center;border-radius:10px}
 .feature-icon svg{width:20px}
-.feature-grid h3{font:700 20px 'Outfit',system-ui;margin:23px 0 9px}
-.feature-grid article>p{color:var(--muted);font-size:14px;line-height:1.6;min-height:68px}
+.feature-grid h3{font:700 20px 'Outfit',system-ui;margin:23px 0 9px;color:#E2E8F0}
+.feature-grid article>p{color:#94A3B8;font-size:14px;line-height:1.6;min-height:68px}
 .mini-answers{display:grid;gap:7px;margin-top:20px}
-.mini-answers span{display:flex;align-items:center;gap:8px;font-size:11px}
+.mini-answers span{display:flex;align-items:center;gap:8px;font-size:11px;color:#94A3B8}
 .mini-answers i{width:22px;height:22px;border-radius:5px;color:#fff;display:grid;place-items:center;font-style:normal}
-.mini-answers b{margin-left:auto}
-.bars{height:120px;border-bottom:1px solid #ddd9e3;display:flex;align-items:flex-end;justify-content:space-around}
+.mini-answers b{margin-left:auto;color:#E2E8F0}
+.bars{height:120px;border-bottom:1px solid #253352;display:flex;align-items:flex-end;justify-content:space-around}
 .bars span{height:100%;width:12%;display:flex;align-items:center;flex-direction:column;justify-content:flex-end;gap:5px}
 .bars i{width:100%;background:linear-gradient(#38BDF8,var(--sky));border-radius:4px 4px 0 0}
 .bars small{font-size:9px;color:#64748B}
@@ -148,20 +164,25 @@ button,input,textarea{font:inherit}button,a{cursor:pointer}a{text-decoration:non
 .fix-sample b{display:block;font-size:11px;margin:10px 0}
 .fix-sample p{font-size:8px;margin:0;color:var(--muted)}
 .fix-sample strong{color:var(--em);font-size:17px}
-.pricing-section{padding:110px 0}
+/* Pricing section — light ice-blue (section 4: back to light) */
+.pricing-section{background:#EFF6FF;padding:110px 0}
+.pricing-section .kicker{color:#0EA5E9}
+.pricing-section .section-heading h2{color:#0F172A}
+.pricing-section .section-heading p{color:#64748B}
 .pricing-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:15px}
-.price-card{border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:26px;position:relative}
+.price-card{border:1px solid #E2E8F0;background:#fff;border-radius:14px;padding:26px;position:relative}
 .price-card.popular{border:2px solid var(--sky);transform:translateY(-8px);box-shadow:0 16px 40px rgba(14,165,233,.15)}
 .popular-label{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--sky);color:white;border-radius:99px;padding:5px 12px;font-size:9px;font-weight:800;white-space:nowrap}
-.price-card h3{font:700 18px 'Outfit',system-ui;margin:0;color:var(--ink)}
-.price-card>p{color:var(--muted);font-size:12px}
-.price{margin:25px 0}.price sup{font-size:17px;font-weight:700}
-.price b{font:800 39px 'Outfit',system-ui}
-.price span{color:var(--muted);font-size:12px}
+.price-card h3{font:700 18px 'Outfit',system-ui;margin:0;color:#0F172A}
+.price-card>p{color:#64748B;font-size:12px}
+.price{margin:25px 0}.price sup{font-size:17px;font-weight:700;color:#0F172A}
+.price b{font:800 39px 'Outfit',system-ui;color:#0F172A}
+.price span{color:#64748B;font-size:12px}
 .price-card .button{width:100%}
-.price-card ul{list-style:none;padding:14px 0 0;margin:15px 0 0;border-top:1px solid var(--line)}
-.price-card li{display:flex;align-items:center;gap:8px;font-size:12px;margin:13px 0}
+.price-card ul{list-style:none;padding:14px 0 0;margin:15px 0 0;border-top:1px solid #E2E8F0}
+.price-card li{display:flex;align-items:center;gap:8px;font-size:12px;margin:13px 0;color:#0F172A}
 .price-card li svg{width:15px;color:var(--em)}
+.pricing-section .button.outline{background:#F8FAFC;color:#0F172A;border-color:#E2E8F0}
 .cta{background:var(--navy);color:#fff;text-align:center;padding:100px 0;position:relative;overflow:hidden}
 .cta .container{position:relative}
 .kicker.light{color:#7dd3fc}
