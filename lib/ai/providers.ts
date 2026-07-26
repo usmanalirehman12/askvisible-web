@@ -38,7 +38,7 @@ export function configuredProviders(): Provider[] {
     providers.push({ name: "openai", model, async run(prompt) { const started=Date.now(); const d=await postJson("https://api.openai.com/v1/responses",{method:"POST",headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({model,instructions:SYSTEM,input:prompt,max_output_tokens:900})}); const text=d.output_text || d.output?.flatMap((o:any)=>o.content||[]).filter((c:any)=>c.type==="output_text").map((c:any)=>c.text).join("\n") || ""; return answer("openai",model,prompt,text,[],d.usage,started); } });
   }
   if (process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-    const key=process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY; const model=process.env.GEMINI_MODEL || "gemini-2.0-flash";
+    const key=process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY; const model=process.env.GEMINI_MODEL || "gemini-2.5-flash";
     providers.push({ name:"gemini",model,async run(prompt){const started=Date.now();const d=await postJson(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:"user",parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:900}})});const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("gemini",model,prompt,text,[],d.usageMetadata,started)}});
   }
   if (process.env.PERPLEXITY_API_KEY) {
@@ -51,7 +51,7 @@ export function configuredProviders(): Provider[] {
   }
   if (process.env.DEEPSEEK_API_KEY) {
     const model=process.env.DEEPSEEK_MODEL||"deepseek-chat";
-    providers.push({name:"deepseek",model,async run(prompt){const started=Date.now();const d=await postJson("https://api.deepseek.com/v1/chat/completions",{method:"POST",headers:{Authorization:`Bearer ${process.env.DEEPSEEK_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({model,messages:[{role:"system",content:SYSTEM},{role:"user",content:prompt}],max_tokens:900})},2);return answer("deepseek",model,prompt,d.choices?.[0]?.message?.content||"",[], d.usage,started)}});
+    providers.push({name:"deepseek",model,async run(prompt){const started=Date.now();const d=await postJson("https://api.deepseek.com/chat/completions",{method:"POST",headers:{Authorization:`Bearer ${process.env.DEEPSEEK_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({model,messages:[{role:"system",content:SYSTEM},{role:"user",content:prompt}],max_tokens:900})},2);return answer("deepseek",model,prompt,d.choices?.[0]?.message?.content||"",[], d.usage,started)}});
   }
   // Google AI Overviews — uses Gemini with Google Search grounding, which is the underlying
   // technology that powers AI Overviews. Requires the same Gemini API key but must be
@@ -59,7 +59,7 @@ export function configuredProviders(): Provider[] {
   // prompt and search grounding incurs additional billing on Google's paid tiers.
   if ((process.env.GEMINI_API_KEY||process.env.GOOGLE_GENERATIVE_AI_API_KEY) && process.env.GOOGLE_AI_OVERVIEWS?.trim() === "true") {
     const key=process.env.GEMINI_API_KEY||process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-    const model="gemini-2.0-flash";
+    const model="gemini-2.5-flash";
     providers.push({name:"ai_overviews",model,async run(prompt){const started=Date.now();const d=await postJson(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:"user",parts:[{text:prompt}]}],tools:[{google_search:{}}],generationConfig:{maxOutputTokens:900}})}, 1, 20_000);const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("ai_overviews",model,prompt,text,[],d.usageMetadata,started)}});
   }
   return providers;

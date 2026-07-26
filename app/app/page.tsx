@@ -80,9 +80,7 @@ export default function AppPage(){
    const finishData=await finishRes.json();
    if(!finishRes.ok)throw new Error(finishData.error||"Scan failed.");
    fetch("/api/fixes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scanRunId,brandId:activeBrand.id})}).catch(()=>{});
-   const aoSkip=skipped.find(s=>s.provider==="ai_overviews");
-   const otherCount=skipped.filter(s=>s.provider!=="ai_overviews").length;
-   const skipNote=skipped.length?` · ${[aoSkip?`AI Overviews: ${aoSkip.reason.slice(0,55)}`:null,otherCount?`${otherCount} provider(s) skipped`:null].filter(Boolean).join(", ")}`:"";
+   const skipNote=skipped.length?` · skipped: ${skipped.map(s=>{const name=s.provider==="ai_overviews"?"AI Overviews":s.provider;return `${name} (${s.reason.slice(0,40)})`;}).join(", ")}`:"";
    setToast(`Scan complete — ${finishData.mentions}/${finishData.total} mentions${skipNote}`);
    await new Promise(r=>setTimeout(r,800));
    setRefreshKey(k=>k+1);
