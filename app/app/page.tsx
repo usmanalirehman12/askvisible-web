@@ -67,10 +67,12 @@ export default function AppPage(){
    if(!startRes.ok)throw new Error(startData.error||"Scan failed.");
    const {scanRunId,brand,tasks}=startData;
    setScanProgress({done:0,total:tasks.length});
-   let done=0;
+   let done=0;const skipped:string[]=[];
    await Promise.all(tasks.map(async(task:{provider:string;prompt:string;promptId:string})=>{
     try{
-     await fetch("/api/scan/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scanRunId,provider:task.provider,prompt:task.prompt,promptId:task.promptId,brandName:brand.name,brandDomain:brand.domain})});
+     const r=await fetch("/api/scan/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scanRunId,provider:task.provider,prompt:task.prompt,promptId:task.promptId,brandName:brand.name,brandDomain:brand.domain})});
+     const d=await r.json().catch(()=>({}));
+     if(d.skipped&&!skipped.includes(task.provider))skipped.push(task.provider);
     }catch{}
     done++;setScanProgress({done,total:tasks.length});
    }));
@@ -78,9 +80,11 @@ export default function AppPage(){
    const finishData=await finishRes.json();
    if(!finishRes.ok)throw new Error(finishData.error||"Scan failed.");
    fetch("/api/fixes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scanRunId,brandId:activeBrand.id})}).catch(()=>{});
-   setToast(`Scan complete — ${finishData.mentions}/${finishData.total} mentions`);
+   const skipNote=skipped.length?` · ${skipped.includes("ai_overviews")?"AI Overviews failed (check GOOGLE_AI_OVERVIEWS env)":skipped.join(", ")+" skipped"}`:"";
+   setToast(`Scan complete — ${finishData.mentions}/${finishData.total} mentions${skipNote}`);
    await new Promise(r=>setTimeout(r,800));
    setRefreshKey(k=>k+1);
+   setTimeout(()=>setRefreshKey(k=>k+1),10000);
   }catch(err){setToast(err instanceof Error?err.message:"Scan failed.")}
   finally{setScanning(false);setScanProgress(null);setTimeout(()=>setToast(""),4500)}
  }

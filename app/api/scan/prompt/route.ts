@@ -22,8 +22,10 @@ export async function POST(request: Request) {
     let answer;
     try {
       answer = await runNamedProvider(provider as ProviderName, prompt);
-    } catch {
-      return NextResponse.json({ skipped: true, provider, reason: "Provider failed or not configured." });
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "Provider failed or not configured.";
+      console.error("[scan-prompt]", { provider, reason });
+      return NextResponse.json({ skipped: true, provider, reason });
     }
 
     const analysis = analyzeMention(answer.text, brandName || "", brandDomain || "");

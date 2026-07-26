@@ -19,7 +19,7 @@ async function postJson(url: string, init: RequestInit, attempts = 1): Promise<a
   let last: Error = new Error("Fix generation request failed");
   for (let attempt = 0; attempt < attempts; attempt++) {
     try {
-      const response = await fetch(url, { ...init, signal: AbortSignal.timeout(9_000) });
+      const response = await fetch(url, { ...init, signal: AbortSignal.timeout(7_000) });
       const data = await response.json().catch(() => ({}));
       if (response.ok) return data;
       const message = data?.error?.message || `Anthropic returned HTTP ${response.status}`;
