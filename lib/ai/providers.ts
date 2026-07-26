@@ -39,7 +39,7 @@ export function configuredProviders(): Provider[] {
   }
   if (process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     const key=process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY; const model=process.env.GEMINI_MODEL || "gemini-1.5-flash";
-    providers.push({ name:"gemini",model,async run(prompt){const started=Date.now();const d=await postJson(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:"user",parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:900}})});const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("gemini",model,prompt,text,[],d.usageMetadata,started)}});
+    providers.push({ name:"gemini",model,async run(prompt){const started=Date.now();const d=await postJson(`https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:"user",parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:900}})});const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("gemini",model,prompt,text,[],d.usageMetadata,started)}});
   }
   if (process.env.PERPLEXITY_API_KEY) {
     const model=process.env.PERPLEXITY_MODEL || "sonar";
@@ -60,7 +60,7 @@ export function configuredProviders(): Provider[] {
   if ((process.env.GEMINI_API_KEY||process.env.GOOGLE_GENERATIVE_AI_API_KEY) && process.env.GOOGLE_AI_OVERVIEWS?.trim() === "true") {
     const key=process.env.GEMINI_API_KEY||process.env.GOOGLE_GENERATIVE_AI_API_KEY;
     const model="gemini-1.5-flash";
-    providers.push({name:"ai_overviews",model,async run(prompt){const started=Date.now();const d=await postJson(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:"user",parts:[{text:prompt}]}],tools:[{google_search:{}}],generationConfig:{maxOutputTokens:900}})}, 1, 20_000);const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("ai_overviews",model,prompt,text,[],d.usageMetadata,started)}});
+    providers.push({name:"ai_overviews",model,async run(prompt){const started=Date.now();const d=await postJson(`https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:"user",parts:[{text:prompt}]}],tools:[{googleSearchRetrieval:{}}],generationConfig:{maxOutputTokens:900}})}, 1, 20_000);const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("ai_overviews",model,prompt,text,[],d.usageMetadata,started)}});
   }
   return providers;
 }
