@@ -54,7 +54,7 @@ export function configuredProviders(): Provider[] {
   if ((process.env.GEMINI_API_KEY||process.env.GOOGLE_GENERATIVE_AI_API_KEY) && process.env.GOOGLE_AI_OVERVIEWS==="true") {
     const key=process.env.GEMINI_API_KEY||process.env.GOOGLE_GENERATIVE_AI_API_KEY;
     const model="gemini-2.0-flash";
-    providers.push({name:"ai_overviews",model,async run(prompt){const started=Date.now();const d=await postJson(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:"user",parts:[{text:prompt}]}],tools:[{googleSearch:{}}],generationConfig:{maxOutputTokens:900}})});const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("ai_overviews",model,prompt,text,[],d.usageMetadata,started)}});
+    providers.push({name:"ai_overviews",model,async run(prompt){const started=Date.now();const d=await postJson(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:"user",parts:[{text:prompt}]}],tools:[{google_search:{}}],generationConfig:{maxOutputTokens:900}})});const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("ai_overviews",model,prompt,text,[],d.usageMetadata,started)}});
   }
   return providers;
 }
