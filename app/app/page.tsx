@@ -84,7 +84,8 @@ export default function AppPage(){
    setToast(`Scan complete — ${finishData.mentions}/${finishData.total} mentions${skipNote}`);
    await new Promise(r=>setTimeout(r,800));
    setRefreshKey(k=>k+1);
-   setTimeout(()=>setRefreshKey(k=>k+1),15000);
+   // Poll every 6s for up to 60s so fixes appear as soon as Claude finishes generating them
+   let polls=0;const poll=setInterval(()=>{setRefreshKey(k=>k+1);if(++polls>=10)clearInterval(poll)},6000);
   }catch(err){setToast(err instanceof Error?err.message:"Scan failed.")}
   finally{setScanning(false);setScanProgress(null);setTimeout(()=>setToast(""),4500)}
  }
