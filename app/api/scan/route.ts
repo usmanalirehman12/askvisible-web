@@ -41,7 +41,6 @@ export async function POST(request: Request) {
   try {
     const scan = await runAndSaveScan(supabase, brand.workspace_id, brand);
     console.log("[scan-providers]", { providers: [...new Set(scan.answers.map((a: any) => a.provider))], total: scan.answers.length });
-    if (scan.failures?.length) console.warn("[scan-failures]", scan.failures);
 
     let fixesGenerated = 0;
     let fixesError: string | null = null;
