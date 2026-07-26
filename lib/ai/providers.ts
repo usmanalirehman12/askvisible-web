@@ -25,6 +25,27 @@ function answer(provider: ProviderName, model: string, prompt: string, text: str
   return { provider, model, prompt, text, citations: [...new Set([...citations, ...urls(text)])].slice(0, 12), tokensIn: usage?.input_tokens ?? usage?.prompt_tokens ?? usage?.promptTokenCount ?? 0, tokensOut: usage?.output_tokens ?? usage?.completion_tokens ?? usage?.candidatesTokenCount ?? 0, latencyMs: Date.now() - started };
 }
 
+// Discovers the working Gemini model+API-version for this key. Cached per cold start.
+let _gEndpoint: Promise<{ model: string; ver: string }> | null = null;
+function geminiEndpoint(key: string, preferred: string): Promise<{ model: string; ver: string }> {
+  if (_gEndpoint) return _gEndpoint;
+  return (_gEndpoint = (async () => {
+    for (const ver of ["v1", "v1beta"]) {
+      try {
+        const r = await fetch(`https://generativelanguage.googleapis.com/${ver}/models?key=${key}&pageSize=100`, { signal: AbortSignal.timeout(4_000) });
+        if (!r.ok) continue;
+        const { models = [] } = await r.json().catch(() => ({ models: [] }));
+        const usable: string[] = (models as any[])
+          .filter((m: any) => m.supportedGenerationMethods?.includes("generateContent"))
+          .map((m: any) => (m.name as string).replace("models/", ""));
+        const pick = usable.find(n => n.includes("flash-lite")) || usable.find(n => n.includes("flash")) || usable.find(n => n.includes("pro")) || usable[0];
+        if (pick) return { model: pick, ver };
+      } catch {}
+    }
+    return { model: preferred, ver: "v1" };
+  })());
+}
+
 export async function runNamedProvider(name: ProviderName, prompt: string) {
   const provider = configuredProviders().find(p => p.name === name);
   if (!provider) throw new Error(`Provider "${name}" is not configured.`);
@@ -38,8 +59,8 @@ export function configuredProviders(): Provider[] {
     providers.push({ name: "openai", model, async run(prompt) { const started=Date.now(); const d=await postJson("https://api.openai.com/v1/responses",{method:"POST",headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({model,instructions:SYSTEM,input:prompt,max_output_tokens:900})}); const text=d.output_text || d.output?.flatMap((o:any)=>o.content||[]).filter((c:any)=>c.type==="output_text").map((c:any)=>c.text).join("\n") || ""; return answer("openai",model,prompt,text,[],d.usage,started); } });
   }
   if (process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-    const key=process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY; const model=process.env.GEMINI_MODEL || "gemini-1.5-flash";
-    providers.push({ name:"gemini",model,async run(prompt){const started=Date.now();const d=await postJson(`https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:"user",parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:900}})});const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("gemini",model,prompt,text,[],d.usageMetadata,started)}});
+    const key=process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY; const preferred=process.env.GEMINI_MODEL || "gemini-1.5-flash";
+    providers.push({ name:"gemini",model:preferred,async run(prompt){const started=Date.now();const {model,ver}=await geminiEndpoint(key!,preferred);const d=await postJson(`https://generativelanguage.googleapis.com/${ver}/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:"user",parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:900}})});const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("gemini",model,prompt,text,[],d.usageMetadata,started)}});
   }
   if (process.env.PERPLEXITY_API_KEY) {
     const model=process.env.PERPLEXITY_MODEL || "sonar";
@@ -58,9 +79,8 @@ export function configuredProviders(): Provider[] {
   // explicitly opted in (GOOGLE_AI_OVERVIEWS=true) since it runs a second Gemini call per
   // prompt and search grounding incurs additional billing on Google's paid tiers.
   if ((process.env.GEMINI_API_KEY||process.env.GOOGLE_GENERATIVE_AI_API_KEY) && process.env.GOOGLE_AI_OVERVIEWS?.trim() === "true") {
-    const key=process.env.GEMINI_API_KEY||process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-    const model="gemini-1.5-flash";
-    providers.push({name:"ai_overviews",model,async run(prompt){const started=Date.now();const d=await postJson(`https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:"user",parts:[{text:prompt}]}],tools:[{googleSearchRetrieval:{}}],generationConfig:{maxOutputTokens:900}})}, 1, 20_000);const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("ai_overviews",model,prompt,text,[],d.usageMetadata,started)}});
+    const key=process.env.GEMINI_API_KEY||process.env.GOOGLE_GENERATIVE_AI_API_KEY; const preferred="gemini-1.5-flash";
+    providers.push({name:"ai_overviews",model:preferred,async run(prompt){const started=Date.now();const {model,ver}=await geminiEndpoint(key!,preferred);let d:any;let lastErr:Error=new Error("grounding unavailable");for(const tools of [[{googleSearchRetrieval:{}}],[{google_search:{}}]]){try{d=await postJson(`https://generativelanguage.googleapis.com/${ver}/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:"user",parts:[{text:prompt}]}],tools,generationConfig:{maxOutputTokens:900}})},1,20_000);break;}catch(e){lastErr=e instanceof Error?e:lastErr;}}if(!d)throw lastErr;const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("ai_overviews",model,prompt,text,[],d.usageMetadata,started)}});
   }
   return providers;
 }
