@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Check, ChevronRight, LineChart, Radar, Sparkles, Zap } from "lucide-react";
+import HomeChecker from "@/components/HomeChecker";
 
 const enginesStrip = [
   {name:"ChatGPT",    s:"C", cls:"e0"},
@@ -40,7 +41,7 @@ export default function Home() {
       <p className="hero-copy">Track how ChatGPT, Gemini, Perplexity, Claude, DeepSeek, and Google AI Overviews talk about your brand — and get AI-written fixes that move you into the answer.</p>
       <div className="hero-actions">
         <Link className="button" href="/app">Start tracking free <ArrowRight size={17}/></Link>
-        <Link className="button ghost" href="/app">Explore live demo</Link>
+        <HomeChecker />
       </div>
       <div className="trustline">
         <span><Check/>No credit card</span>

@@ -481,3 +481,129 @@ td .up,td .down{display:flex;align-items:center}td svg{width:12px}
 /* ====== Responsive additions ====== */
 @media(max-width:1000px){.testimonial-grid{grid-template-columns:1fr}.revenue-grid{grid-template-columns:1fr;gap:40px}}
 @media(max-width:760px){.social-section{padding:50px 0}.revenue-section{padding:60px 0}.faq-section{padding:60px 0}.faq-item summary{font-size:14px}}
+
+/* ====== HomeChecker — modal scanner ====== */
+.checker-trigger{background:rgba(14,165,233,.15);border:1px solid rgba(14,165,233,.4);color:#7dd3fc;border-radius:9px;padding:11px 18px;font-weight:700;font-size:14px;display:inline-flex;align-items:center;gap:7px;transition:.2s;cursor:pointer}
+.checker-trigger:hover{background:rgba(14,165,233,.25);transform:translateY(-1px)}
+.checker-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+.checker-modal{background:#1E293B;border:1px solid #334155;border-radius:16px;width:100%;max-width:520px;position:relative;max-height:90vh;overflow-y:auto;color:#F1F5F9}
+.checker-close{position:absolute;top:14px;right:14px;background:rgba(255,255,255,.08);border:none;color:#94A3B8;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;cursor:pointer;z-index:1}
+.checker-close:hover{background:rgba(255,255,255,.14);color:#F1F5F9}
+/* Form state */
+.checker-form{padding:36px 32px 28px;display:flex;flex-direction:column;gap:14px}
+.checker-head{text-align:center;margin-bottom:8px}
+.checker-icon{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;background:rgba(14,165,233,.15);border-radius:12px;color:#38BDF8;margin-bottom:14px}
+.checker-head h2{font:700 22px 'Outfit',system-ui;margin:0 0 8px;color:#F1F5F9;letter-spacing:-.5px}
+.checker-head p{color:#94A3B8;font-size:14px;margin:0;line-height:1.6}
+.checker-form label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:#CBD5E1}
+.checker-form label input{background:#0F172A;border:1px solid #334155;border-radius:8px;padding:11px 14px;color:#F1F5F9;font-size:14px;outline:none;transition:.15s}
+.checker-form label input:focus{border-color:#0EA5E9;box-shadow:0 0 0 3px rgba(14,165,233,.12)}
+.checker-form label input::placeholder{color:#475569}
+.checker-btn{background:#0EA5E9;border:none;color:#fff;border-radius:9px;padding:13px 20px;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;transition:.2s;margin-top:4px;text-decoration:none}
+.checker-btn:hover{background:#0284C7;transform:translateY(-1px)}
+.checker-fine{text-align:center;color:#475569;font-size:12px;margin:0}
+.checker-error-msg{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#FCA5A5;border-radius:8px;padding:10px 14px;font-size:13px}
+/* Scanning state */
+.checker-scanning{padding:48px 32px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:14px}
+.checker-spin{color:#0EA5E9}
+.checker-scanning h2{font:700 20px 'Outfit',system-ui;margin:0;color:#F1F5F9}
+.checker-scanning p{color:#94A3B8;margin:0;font-size:14px}
+.checker-scanning strong{color:#F1F5F9}
+.checker-progress-bar{width:100%;max-width:320px;height:6px;background:#1E293B;border:1px solid #334155;border-radius:99px;overflow:hidden}
+.checker-progress-bar div{height:100%;background:linear-gradient(90deg,#0EA5E9,#38BDF8);border-radius:99px;transition:width .3s}
+.checker-progress-label{font-size:12px;color:#64748B}
+/* Results state */
+.checker-results{padding:28px 32px;display:flex;flex-direction:column;gap:20px}
+.checker-score-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.checker-score-label{display:block;font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#64748B;margin-bottom:6px}
+.checker-score-num{font:800 72px 'Outfit',system-ui;line-height:1;letter-spacing:-4px}
+.checker-score-sub{display:block;font-size:13px;color:#94A3B8;margin-top:6px}
+.checker-score-right{display:flex;align-items:center}
+.checker-fix-cta{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:#FCD34D;border-radius:10px;padding:12px 16px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;max-width:200px;line-height:1.4}
+.checker-engines{display:flex;flex-direction:column;gap:10px}
+.checker-engine-row{display:grid;grid-template-columns:28px 100px 1fr 110px;align-items:center;gap:10px}
+.checker-dot{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:#fff;font-size:11px;font-weight:700;flex-shrink:0}
+.checker-engine-name{font-size:13px;font-weight:600;color:#CBD5E1}
+.checker-engine-bar{height:6px;background:#1E293B;border-radius:99px;overflow:hidden}
+.checker-engine-bar div{height:100%;border-radius:99px;transition:width .4s}
+.checker-engine-pct{font-size:12px;font-weight:600;text-align:right}
+.checker-engine-pct.mentioned{color:#10B981}
+.checker-engine-pct.missed{color:#EF4444}
+.checker-actions{display:flex;flex-direction:column;gap:10px}
+.checker-signup-link{text-align:center;color:#94A3B8;font-size:13px;display:flex;align-items:center;justify-content:center;gap:5px}
+.checker-signup-link:hover{color:#F1F5F9}
+.checker-fixing-msg{display:flex;align-items:center;gap:10px;color:#94A3B8;font-size:13px}
+/* Fixed / fixes state */
+.checker-fixed{padding:24px 32px 28px;display:flex;flex-direction:column;gap:16px}
+.checker-score-compact{display:flex;align-items:center;gap:10px;font-size:13px;color:#94A3B8}
+.checker-score-compact strong{font:700 28px 'Outfit',system-ui;letter-spacing:-1px}
+.checker-fixes-title{font:700 17px 'Outfit',system-ui;margin:0;color:#F1F5F9;display:flex;align-items:center;gap:8px}
+.checker-fix-card{background:#0F172A;border:1px solid #334155;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px}
+.checker-fix-top{display:flex;align-items:center;justify-content:space-between}
+.checker-fix-category{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748B;background:#1E293B;border-radius:4px;padding:3px 8px}
+.checker-fix-impact{font-size:12px;font-weight:700;color:#10B981}
+.checker-fix-card b{font-size:14px;color:#F1F5F9}
+.checker-fix-card p{font-size:13px;color:#94A3B8;margin:0;line-height:1.55}
+.checker-fix-content{background:#131B2E;border:1px solid #1E293B;border-radius:8px;overflow:hidden}
+.checker-fix-content span{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748B;padding:8px 12px;border-bottom:1px solid #1E293B}
+.checker-fix-content pre{margin:0;padding:10px 12px;font-size:12px;color:#94A3B8;white-space:pre-wrap;word-break:break-word;font-family:'Plus Jakarta Sans',system-ui;line-height:1.55}
+.checker-cta-final{background:rgba(14,165,233,.08);border:1px solid rgba(14,165,233,.2);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:10px;text-align:center}
+.checker-cta-final p{color:#94A3B8;font-size:13px;margin:0;line-height:1.5}
+.checker-review-link{color:#64748B;font-size:12px;display:flex;align-items:center;justify-content:center;gap:4px}
+.checker-review-link:hover{color:#94A3B8}
+.checker-no-fixes{color:#64748B;font-size:13px;margin:0}
+
+/* ====== Review page ====== */
+.review-shell{min-height:100vh;background:#0F172A;color:#F1F5F9}
+.review-nav{height:68px;display:flex;align-items:center;justify-content:space-between;max-width:1100px;margin:auto;padding:0 24px;border-bottom:1px solid #1E293B}
+.review-body{max-width:1100px;margin:auto;padding:48px 24px 80px}
+.review-header{margin-bottom:36px}
+.review-kicker{font-size:11px;font-weight:800;letter-spacing:1.4px;color:#0EA5E9;text-transform:uppercase}
+.review-header h1{font:800 clamp(28px,4vw,44px)/1.1 'Outfit',system-ui;margin:10px 0 4px;letter-spacing:-1.5px}
+.review-domain{color:#64748B;font-size:15px;margin:0}
+.review-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:32px}
+@media(max-width:720px){.review-grid{grid-template-columns:1fr}}
+.review-card{background:#1E293B;border:1px solid #334155;border-radius:14px;padding:28px}
+.score-card{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.review-score{font:800 80px 'Outfit',system-ui;line-height:1;letter-spacing:-4px}
+.review-score-label{font-size:15px;color:#94A3B8}
+.review-mentions{font-size:13px;color:#475569;margin-top:4px}
+.engines-card h3{font:700 16px 'Outfit',system-ui;margin:0 0 18px;color:#F1F5F9}
+.review-engine-row{display:grid;grid-template-columns:28px 100px 1fr 44px;align-items:center;gap:10px;margin-bottom:10px}
+.review-dot{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:#fff;font-size:11px;font-weight:700}
+.review-engine-name{font-size:13px;font-weight:600;color:#CBD5E1}
+.review-engine-bar{height:6px;background:#0F172A;border-radius:99px;overflow:hidden}
+.review-engine-bar div{height:100%;border-radius:99px}
+.review-engine-pct{font-size:12px;font-weight:700;text-align:right}
+.review-engine-pct.ok{color:#10B981}.review-engine-pct.miss{color:#EF4444}
+.review-no-data{color:#475569;font-size:14px}
+.review-fixes{margin-bottom:40px}
+.review-fixes-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:24px}
+.review-fixes-head h2{font:700 22px 'Outfit',system-ui;margin:0 0 6px;display:flex;align-items:center;gap:8px;color:#F1F5F9}
+.review-fixes-head p{color:#64748B;font-size:14px;margin:0}
+.review-generating{display:flex;align-items:center;gap:12px;color:#94A3B8;font-size:14px;padding:24px 0}
+.review-fix-error{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#FCA5A5;border-radius:8px;padding:10px 14px;font-size:13px;display:flex;align-items:center;gap:8px;margin-bottom:16px}
+.review-fix-list{display:flex;flex-direction:column;gap:20px}
+.review-fix-card{background:#1E293B;border:1px solid #334155;border-radius:14px;padding:24px;display:flex;flex-direction:column;gap:12px}
+.review-fix-meta{display:flex;align-items:center;gap:10px}
+.review-fix-cat{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748B;background:#0F172A;border-radius:4px;padding:3px 8px}
+.review-fix-impact{font-size:12px;font-weight:700;color:#10B981}
+.review-fix-card h4{font:700 16px 'Outfit',system-ui;margin:0;color:#F1F5F9}
+.review-fix-card p{color:#94A3B8;margin:0;font-size:14px;line-height:1.6}
+.review-fix-content{background:#131B2E;border:1px solid #1E293B;border-radius:10px;overflow:hidden}
+.review-fix-content-head{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid #1E293B}
+.review-fix-content-head span{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748B}
+.review-copy-btn{font-size:12px;font-weight:600;background:rgba(255,255,255,.07);border:1px solid #334155;color:#94A3B8;border-radius:6px;padding:4px 10px;cursor:pointer;display:flex;align-items:center;gap:4px}
+.review-copy-btn:hover{background:rgba(255,255,255,.12);color:#F1F5F9}
+.review-fix-content pre{margin:0;padding:14px;font-size:13px;color:#94A3B8;white-space:pre-wrap;word-break:break-word;font-family:'Plus Jakarta Sans',system-ui;line-height:1.6}
+.review-cta{background:linear-gradient(135deg,rgba(14,165,233,.08),rgba(16,185,129,.06));border:1px solid rgba(14,165,233,.2);border-radius:16px;padding:48px}
+.review-cta-inner{max-width:540px;margin:auto;text-align:center}
+.review-cta h2{font:800 28px 'Outfit',system-ui;margin:0 0 12px;letter-spacing:-.8px}
+.review-cta p{color:#94A3B8;font-size:15px;margin:0 0 24px;line-height:1.6}
+.review-cta-actions{margin-bottom:16px}
+.review-cta-checks{display:flex;justify-content:center;gap:20px;flex-wrap:wrap;font-size:13px;color:#64748B}
+.review-cta-checks span{display:flex;align-items:center;gap:5px}
+.review-cta-checks svg{color:#10B981}
+.review-empty{max-width:480px;margin:100px auto;text-align:center;display:flex;flex-direction:column;align-items:center;gap:16px}
+.review-empty h1{font:700 28px 'Outfit',system-ui;margin:0}
+.review-empty p{color:#64748B;margin:0}
