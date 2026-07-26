@@ -86,7 +86,9 @@ export default function AppPage(){
    setRefreshKey(k=>k+1);
    fixPromise.then(fixResult=>{
     setRefreshKey(k=>k+1);
-    if(fixResult.error){setToast(`Fix generation failed: ${String(fixResult.error).slice(0,80)}`);setTimeout(()=>setToast(""),7000);}
+    if(fixResult.error){setToast(`Fix failed: ${String(fixResult.error).slice(0,80)}`);setTimeout(()=>setToast(""),7000);}
+    else if(fixResult.skipped){setToast("Fixes skipped — ANTHROPIC_API_KEY not found in Vercel env vars");setTimeout(()=>setToast(""),7000);}
+    else if(!fixResult.fixesGenerated){setToast(`Fixes returned 0 — Claude may have returned empty JSON`);setTimeout(()=>setToast(""),7000);}
    });
   }catch(err){setToast(err instanceof Error?err.message:"Scan failed.")}
   finally{setScanning(false);setScanProgress(null);setTimeout(()=>setToast(""),4500)}
