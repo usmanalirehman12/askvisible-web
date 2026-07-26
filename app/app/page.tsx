@@ -28,6 +28,7 @@ export default function AppPage(){
  const router=useRouter();
  const demo=!supabaseConfigured();
  const [section,setSection]=useState("overview"),[scanning,setScanning]=useState(false),[open,setOpen]=useState(false),[toast,setToast]=useState("");
+ const [scanProgress,setScanProgress]=useState<{done:number;total:number}|null>(null);
  const [ctx,setCtx]=useState<WorkspaceContext|null>(null);
  const [ctxLoading,setCtxLoading]=useState(!demo);
  const [ctxError,setCtxError]=useState("");
@@ -59,16 +60,29 @@ export default function AppPage(){
  async function scan(){
   if(demo){setScanning(true);setTimeout(()=>{setScanning(false);setToast("Scan complete — 4 new mentions found");setTimeout(()=>setToast(""),3500)},1800);return}
   if(!activeBrand){setToast("Add a client before running a scan");setTimeout(()=>setToast(""),3500);return}
-  setScanning(true);
+  setScanning(true);setScanProgress(null);
   try{
-   const res=await fetch("/api/scan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({brandId:activeBrand.id})});
-   const data=await res.json();
-   if(!res.ok)throw new Error(data.error||"Scan failed.");
-   setToast(data.fixesGenerated?`Scan complete — ${data.mentions}/${data.total} mentions, ${data.fixesGenerated} new fix${data.fixesGenerated===1?"":"es"} generated`:`Scan complete — ${data.mentions}/${data.total} mentions`);
+   const startRes=await fetch("/api/scan/start",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({brandId:activeBrand.id})});
+   const startData=await startRes.json();
+   if(!startRes.ok)throw new Error(startData.error||"Scan failed.");
+   const {scanRunId,brand,tasks}=startData;
+   setScanProgress({done:0,total:tasks.length});
+   let done=0;
+   await Promise.all(tasks.map(async(task:{provider:string;prompt:string;promptId:string})=>{
+    try{
+     await fetch("/api/scan/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scanRunId,provider:task.provider,prompt:task.prompt,promptId:task.promptId,brandName:brand.name,brandDomain:brand.domain})});
+    }catch{}
+    done++;setScanProgress({done,total:tasks.length});
+   }));
+   const finishRes=await fetch("/api/scan/finish",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scanRunId,totalExpected:tasks.length})});
+   const finishData=await finishRes.json();
+   if(!finishRes.ok)throw new Error(finishData.error||"Scan failed.");
+   fetch("/api/fixes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scanRunId,brandId:activeBrand.id})}).catch(()=>{});
+   setToast(`Scan complete — ${finishData.mentions}/${finishData.total} mentions`);
    await new Promise(r=>setTimeout(r,800));
    setRefreshKey(k=>k+1);
   }catch(err){setToast(err instanceof Error?err.message:"Scan failed.")}
-  finally{setScanning(false);setTimeout(()=>setToast(""),4500)}
+  finally{setScanning(false);setScanProgress(null);setTimeout(()=>setToast(""),4500)}
  }
 
  if(!demo&&ctxLoading)return <main className="app-shell auth-shell"><LoaderCircle className="spin"/></main>;
@@ -90,7 +104,7 @@ export default function AppPage(){
     <div className="profile"><span>{displayName.slice(0,2).toUpperCase()||"?"}</span><div><b>{displayName||"…"}</b><small>{displayEmail}</small></div>{demo?<MoreHorizontal/>:<form action="/logout" method="POST"><button className="icon-btn" title="Log out" aria-label="Log out"><LogOut/></button></form>}</div>
    </div>
   </aside>
-  <section className="app-content"><header className="app-header"><button className="menu-btn" onClick={()=>setOpen(true)}><Menu/></button><div className="header-search"><Search/><input placeholder="Search prompts, reports, fixes…"/><kbd>⌘ K</kbd></div><div className="header-actions"><button className="icon-btn"><Bell/><i/></button><button className="icon-btn theme-toggle" onClick={toggleTheme} title={theme==='light'?'Switch to dark mode':'Switch to light mode'} aria-label="Toggle theme">{theme==='light'?<Moon size={18}/>:<Sun size={18}/>}</button><button className="scan-btn" onClick={scan} disabled={scanning}>{scanning?<LoaderCircle className="spin"/>:<Play/>}{scanning?"Scanning…":"Run scan"}</button></div></header>
+  <section className="app-content"><header className="app-header"><button className="menu-btn" onClick={()=>setOpen(true)}><Menu/></button><div className="header-search"><Search/><input placeholder="Search prompts, reports, fixes…"/><kbd>⌘ K</kbd></div><div className="header-actions"><button className="icon-btn"><Bell/><i/></button><button className="icon-btn theme-toggle" onClick={toggleTheme} title={theme==='light'?'Switch to dark mode':'Switch to light mode'} aria-label="Toggle theme">{theme==='light'?<Moon size={18}/>:<Sun size={18}/>}</button><button className="scan-btn" onClick={scan} disabled={scanning}>{scanning?<LoaderCircle className="spin"/>:<Play/>}{scanning?(scanProgress?`${scanProgress.done}/${scanProgress.total} prompts…`:"Starting…"):"Run scan"}</button></div></header>
     <div className="app-page">{section==="overview"?<Overview demo={demo} brand={activeBrand} refreshKey={refreshKey} scan={scan} scanning={scanning} setSection={setSection} firstName={firstName}/>:section==="prompts"?<Prompts demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:section==="fixes"?<Fixes demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:section==="competitors"?<Competitors demo={demo} brand={activeBrand}/>:section==="reports"?<Reports/>:<SettingsPage/>}</div>
   </section>
  </main>

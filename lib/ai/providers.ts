@@ -25,6 +25,12 @@ function answer(provider: ProviderName, model: string, prompt: string, text: str
   return { provider, model, prompt, text, citations: [...new Set([...citations, ...urls(text)])].slice(0, 12), tokensIn: usage?.input_tokens ?? usage?.prompt_tokens ?? usage?.promptTokenCount ?? 0, tokensOut: usage?.output_tokens ?? usage?.completion_tokens ?? usage?.candidatesTokenCount ?? 0, latencyMs: Date.now() - started };
 }
 
+export async function runNamedProvider(name: ProviderName, prompt: string) {
+  const provider = configuredProviders().find(p => p.name === name);
+  if (!provider) throw new Error(`Provider "${name}" is not configured.`);
+  return provider.run(prompt);
+}
+
 export function configuredProviders(): Provider[] {
   const providers: Provider[] = [];
   if (process.env.OPENAI_API_KEY) {
