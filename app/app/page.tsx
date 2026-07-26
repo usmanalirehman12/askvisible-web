@@ -79,13 +79,15 @@ export default function AppPage(){
    const finishRes=await fetch("/api/scan/finish",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scanRunId,totalExpected:tasks.length})});
    const finishData=await finishRes.json();
    if(!finishRes.ok)throw new Error(finishData.error||"Scan failed.");
-   fetch("/api/fixes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scanRunId,brandId:activeBrand.id})}).catch(()=>{});
+   const fixPromise=fetch("/api/fixes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scanRunId,brandId:activeBrand.id})}).then(r=>r.json().catch(()=>({}))).catch(()=>({error:"request failed"}));
    const skipNote=skipped.length?` · skipped: ${skipped.map(s=>{const name=s.provider==="ai_overviews"?"AI Overviews":s.provider;return `${name} (${s.reason.slice(0,40)})`;}).join(", ")}`:"";
    setToast(`Scan complete — ${finishData.mentions}/${finishData.total} mentions${skipNote}`);
    await new Promise(r=>setTimeout(r,800));
    setRefreshKey(k=>k+1);
-   // Poll every 6s for up to 60s so fixes appear as soon as Claude finishes generating them
-   let polls=0;const poll=setInterval(()=>{setRefreshKey(k=>k+1);if(++polls>=10)clearInterval(poll)},6000);
+   fixPromise.then(fixResult=>{
+    setRefreshKey(k=>k+1);
+    if(fixResult.error){setToast(`Fix generation failed: ${String(fixResult.error).slice(0,80)}`);setTimeout(()=>setToast(""),7000);}
+   });
   }catch(err){setToast(err instanceof Error?err.message:"Scan failed.")}
   finally{setScanning(false);setScanProgress(null);setTimeout(()=>setToast(""),4500)}
  }
