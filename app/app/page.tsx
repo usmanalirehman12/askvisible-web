@@ -65,6 +65,7 @@ export default function AppPage(){
    const data=await res.json();
    if(!res.ok)throw new Error(data.error||"Scan failed.");
    setToast(data.fixesGenerated?`Scan complete — ${data.mentions}/${data.total} mentions, ${data.fixesGenerated} new fix${data.fixesGenerated===1?"":"es"} generated`:`Scan complete — ${data.mentions}/${data.total} mentions`);
+   await new Promise(r=>setTimeout(r,800));
    setRefreshKey(k=>k+1);
   }catch(err){setToast(err instanceof Error?err.message:"Scan failed.")}
   finally{setScanning(false);setTimeout(()=>setToast(""),4500)}
