@@ -25,11 +25,15 @@ function answer(provider: ProviderName, model: string, prompt: string, text: str
   return { provider, model, prompt, text, citations: [...new Set([...citations, ...urls(text)])].slice(0, 12), tokensIn: usage?.input_tokens ?? usage?.prompt_tokens ?? usage?.promptTokenCount ?? 0, tokensOut: usage?.output_tokens ?? usage?.completion_tokens ?? usage?.candidatesTokenCount ?? 0, latencyMs: Date.now() - started };
 }
 
-// Discovers the working Gemini model+API-version for this key. Cached per cold start.
+// Discovers a working Gemini model+API-version for this key via ListModels + probe.
+// Results are cached per cold start so the probe only runs once.
 let _gEndpoint: Promise<{ model: string; ver: string }> | null = null;
 function geminiEndpoint(key: string, preferred: string): Promise<{ model: string; ver: string }> {
   if (_gEndpoint) return _gEndpoint;
   return (_gEndpoint = (async () => {
+    // 1. Fetch model list (try v1 first, fall back to v1beta)
+    let discovered: string[] = [];
+    let listVer = "v1";
     for (const ver of ["v1", "v1beta"]) {
       try {
         const r = await fetch(`https://generativelanguage.googleapis.com/${ver}/models?key=${key}&pageSize=100`, { signal: AbortSignal.timeout(4_000) });
@@ -38,10 +42,29 @@ function geminiEndpoint(key: string, preferred: string): Promise<{ model: string
         const usable: string[] = (models as any[])
           .filter((m: any) => m.supportedGenerationMethods?.includes("generateContent"))
           .map((m: any) => (m.name as string).replace("models/", ""));
-        const pick = usable.find(n => n.includes("flash") && !n.includes("lite")) || usable.find(n => n.includes("pro")) || usable.find(n => n.includes("flash")) || usable[0];
-        if (pick) return { model: pick, ver };
+        if (usable.length) { discovered = usable; listVer = ver; break; }
       } catch {}
     }
+    // 2. Sort preference: non-lite flash > pro > any flash > others
+    const sorted = [
+      ...discovered.filter(n => n.includes("flash") && !n.includes("lite")),
+      ...discovered.filter(n => n.includes("pro") && !n.includes("flash")),
+      ...discovered.filter(n => n.includes("flash")),
+      ...discovered,
+    ].filter((n, i, a) => a.indexOf(n) === i).slice(0, 5);
+    // 3. Probe each candidate on listVer then the alternate — first one that responds 200 wins
+    const altVer = listVer === "v1" ? "v1beta" : "v1";
+    const probeBody = JSON.stringify({ contents: [{ role: "user", parts: [{ text: "hi" }] }], generationConfig: { maxOutputTokens: 1 } });
+    for (const model of sorted) {
+      for (const ver of [listVer, altVer]) {
+        try {
+          const r = await fetch(`https://generativelanguage.googleapis.com/${ver}/models/${encodeURIComponent(model)}:generateContent`,
+            { method: "POST", headers: { "x-goog-api-key": key, "Content-Type": "application/json" }, body: probeBody, signal: AbortSignal.timeout(5_000) });
+          if (r.ok) return { model, ver };
+        } catch {}
+      }
+    }
+    // 4. Nothing worked — fall back to preferred and let the actual call surface the error
     return { model: preferred, ver: "v1" };
   })());
 }
