@@ -51,9 +51,10 @@ export async function generateFixes(brand: { name: string; domain: string }, ans
   const data = await postJson("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-    body: JSON.stringify({ model: FIX_MODEL, system: SYSTEM, max_tokens: 1200, messages: [{ role: "user", content: evidence }] })
+    body: JSON.stringify({ model: FIX_MODEL, system: SYSTEM, max_tokens: 3000, messages: [{ role: "user", content: evidence }] })
   });
 
+  if (data.stop_reason === "max_tokens") throw new Error("Claude hit token limit — increase max_tokens or shorten the prompt.");
   const text: string = data.content?.filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n") || "";
   const jsonMatch = text.match(/\[[\s\S]*\]/);
   if (!jsonMatch) throw new Error("Claude did not return parseable fix suggestions.");
