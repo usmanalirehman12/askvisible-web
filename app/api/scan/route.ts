@@ -22,6 +22,7 @@ function allowed(key: string) {
 }
 
 export async function POST(request: Request) {
+  try {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
@@ -68,8 +69,13 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Scan failed.";
-    console.error("[dashboard-scan]", { message, userId: user.id, brandId: body.brandId });
+    console.error("[dashboard-scan]", { message });
     const status = /No AI providers/.test(message) ? 503 : /no tracked prompts/i.test(message) ? 400 : 502;
     return NextResponse.json({ error: message }, { status });
+  }
+  } catch (outerErr) {
+    const message = outerErr instanceof Error ? outerErr.message : "Unexpected server error.";
+    console.error("[scan-outer]", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

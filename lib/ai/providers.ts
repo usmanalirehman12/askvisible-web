@@ -7,7 +7,7 @@ async function postJson(url: string, init: RequestInit, attempts = 1): Promise<a
   let last: Error = new Error("Provider request failed");
   for (let attempt = 0; attempt < attempts; attempt++) {
     try {
-      const response = await fetch(url, { ...init, signal: AbortSignal.timeout(15_000) });
+      const response = await fetch(url, { ...init, signal: AbortSignal.timeout(8_000) });
       const data = await response.json().catch(() => ({}));
       if (response.ok) return data;
       const message = data?.error?.message || data?.message || `Provider returned HTTP ${response.status}`;
