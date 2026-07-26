@@ -43,5 +43,18 @@ export function configuredProviders(): Provider[] {
     const model=process.env.ANTHROPIC_MODEL || "claude-haiku-4-5";
     providers.push({name:"anthropic",model,async run(prompt){const started=Date.now();const d=await postJson("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"x-api-key":process.env.ANTHROPIC_API_KEY!,"anthropic-version":"2023-06-01","Content-Type":"application/json"},body:JSON.stringify({model,system:SYSTEM,max_tokens:900,messages:[{role:"user",content:prompt}]})});const text=d.content?.filter((c:any)=>c.type==="text").map((c:any)=>c.text).join("\n")||"";return answer("anthropic",model,prompt,text,[],d.usage,started)}});
   }
+  if (process.env.DEEPSEEK_API_KEY) {
+    const model=process.env.DEEPSEEK_MODEL||"deepseek-chat";
+    providers.push({name:"deepseek",model,async run(prompt){const started=Date.now();const d=await postJson("https://api.deepseek.com/v1/chat/completions",{method:"POST",headers:{Authorization:`Bearer ${process.env.DEEPSEEK_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({model,messages:[{role:"system",content:SYSTEM},{role:"user",content:prompt}],max_tokens:900})},2);return answer("deepseek",model,prompt,d.choices?.[0]?.message?.content||"",[], d.usage,started)}});
+  }
+  // Google AI Overviews — uses Gemini with Google Search grounding, which is the underlying
+  // technology that powers AI Overviews. Requires the same Gemini API key but must be
+  // explicitly opted in (GOOGLE_AI_OVERVIEWS=true) since it runs a second Gemini call per
+  // prompt and search grounding incurs additional billing on Google's paid tiers.
+  if ((process.env.GEMINI_API_KEY||process.env.GOOGLE_GENERATIVE_AI_API_KEY) && process.env.GOOGLE_AI_OVERVIEWS==="true") {
+    const key=process.env.GEMINI_API_KEY||process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    const model="gemini-2.0-flash";
+    providers.push({name:"ai_overviews",model,async run(prompt){const started=Date.now();const d=await postJson(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:"user",parts:[{text:prompt}]}],tools:[{googleSearch:{}}],generationConfig:{maxOutputTokens:900}})});const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("ai_overviews",model,prompt,text,[],d.usageMetadata,started)}});
+  }
   return providers;
 }

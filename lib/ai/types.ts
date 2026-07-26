@@ -1,4 +1,4 @@
-export type ProviderName = "openai" | "gemini" | "perplexity" | "anthropic";
+export type ProviderName = "openai" | "gemini" | "perplexity" | "anthropic" | "deepseek" | "ai_overviews";
 
 export type BrandProfile = {
   name: string;

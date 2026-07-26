@@ -302,6 +302,7 @@ button,input,textarea{font:inherit}button,a{cursor:pointer}a{text-decoration:non
 .engine-logo{width:28px;height:28px;display:grid;place-items:center;border-radius:7px;color:#fff;font-size:11px;font-weight:800}
 .engine-logo.green{background:#20201f}.engine-logo.blue{background:#4b82ed}
 .engine-logo.teal{background:#1b9e9d}.engine-logo.orange{background:#d27d46}
+.engine-logo.crimson{background:#b5121b}.engine-logo.cobalt{background:#4285F4}
 .engine-row>div{flex:1}
 .engine-row b{font-size:12px;color:var(--ink);font-weight:600}
 .engine-row i{display:block;background:var(--line);border-radius:9px;height:5px;margin-top:6px}
