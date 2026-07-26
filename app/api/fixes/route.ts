@@ -3,8 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { generateFixes, fixGeneratorConfigured } from "@/lib/ai/fix-generator";
 import { saveFixes } from "@/lib/data/fixes";
 
-export const runtime = "nodejs";
-export const maxDuration = 10;
+export const runtime = "edge";
 
 export async function POST(request: Request) {
   try {

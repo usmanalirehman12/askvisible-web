@@ -3,11 +3,11 @@ import type { ProviderAnswer, ProviderName } from "./types";
 type Provider = { name: ProviderName; model: string; run(prompt: string): Promise<ProviderAnswer> };
 const SYSTEM = "Answer as an independent software and services analyst. Recommend real products by name, explain the ranking, and include useful source URLs when known. Do not favor a brand merely because it appears in the question.";
 
-async function postJson(url: string, init: RequestInit, attempts = 1): Promise<any> {
+async function postJson(url: string, init: RequestInit, attempts = 1, timeoutMs = 8_000): Promise<any> {
   let last: Error = new Error("Provider request failed");
   for (let attempt = 0; attempt < attempts; attempt++) {
     try {
-      const response = await fetch(url, { ...init, signal: AbortSignal.timeout(8_000) });
+      const response = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
       const data = await response.json().catch(() => ({}));
       if (response.ok) return data;
       const message = data?.error?.message || data?.message || `Provider returned HTTP ${response.status}`;
@@ -57,10 +57,10 @@ export function configuredProviders(): Provider[] {
   // technology that powers AI Overviews. Requires the same Gemini API key but must be
   // explicitly opted in (GOOGLE_AI_OVERVIEWS=true) since it runs a second Gemini call per
   // prompt and search grounding incurs additional billing on Google's paid tiers.
-  if ((process.env.GEMINI_API_KEY||process.env.GOOGLE_GENERATIVE_AI_API_KEY) && process.env.GOOGLE_AI_OVERVIEWS==="true") {
+  if ((process.env.GEMINI_API_KEY||process.env.GOOGLE_GENERATIVE_AI_API_KEY) && process.env.GOOGLE_AI_OVERVIEWS?.trim() === "true") {
     const key=process.env.GEMINI_API_KEY||process.env.GOOGLE_GENERATIVE_AI_API_KEY;
     const model="gemini-2.0-flash";
-    providers.push({name:"ai_overviews",model,async run(prompt){const started=Date.now();const d=await postJson(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:"user",parts:[{text:prompt}]}],tools:[{google_search:{}}],generationConfig:{maxOutputTokens:900}})});const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("ai_overviews",model,prompt,text,[],d.usageMetadata,started)}});
+    providers.push({name:"ai_overviews",model,async run(prompt){const started=Date.now();const d=await postJson(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:"user",parts:[{text:prompt}]}],tools:[{google_search:{}}],generationConfig:{maxOutputTokens:900}})}, 1, 20_000);const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("ai_overviews",model,prompt,text,[],d.usageMetadata,started)}});
   }
   return providers;
 }

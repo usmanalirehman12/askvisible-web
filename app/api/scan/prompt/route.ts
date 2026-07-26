@@ -4,8 +4,7 @@ import { runNamedProvider } from "@/lib/ai/providers";
 import { analyzeMention, extractUrls } from "@/lib/ai/analyze";
 import type { ProviderName } from "@/lib/ai/types";
 
-export const runtime = "nodejs";
-export const maxDuration = 10;
+export const runtime = "edge";
 
 export async function POST(request: Request) {
   try {

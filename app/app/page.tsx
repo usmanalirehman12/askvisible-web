@@ -67,12 +67,12 @@ export default function AppPage(){
    if(!startRes.ok)throw new Error(startData.error||"Scan failed.");
    const {scanRunId,brand,tasks}=startData;
    setScanProgress({done:0,total:tasks.length});
-   let done=0;const skipped:string[]=[];
+   let done=0;const skipped:{provider:string;reason:string}[]=[];
    await Promise.all(tasks.map(async(task:{provider:string;prompt:string;promptId:string})=>{
     try{
      const r=await fetch("/api/scan/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scanRunId,provider:task.provider,prompt:task.prompt,promptId:task.promptId,brandName:brand.name,brandDomain:brand.domain})});
      const d=await r.json().catch(()=>({}));
-     if(d.skipped&&!skipped.includes(task.provider))skipped.push(task.provider);
+     if(d.skipped&&!skipped.find(s=>s.provider===task.provider))skipped.push({provider:task.provider,reason:d.reason||"provider failed"});
     }catch{}
     done++;setScanProgress({done,total:tasks.length});
    }));
@@ -80,11 +80,13 @@ export default function AppPage(){
    const finishData=await finishRes.json();
    if(!finishRes.ok)throw new Error(finishData.error||"Scan failed.");
    fetch("/api/fixes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scanRunId,brandId:activeBrand.id})}).catch(()=>{});
-   const skipNote=skipped.length?` · ${skipped.includes("ai_overviews")?"AI Overviews failed (check GOOGLE_AI_OVERVIEWS env)":skipped.join(", ")+" skipped"}`:"";
+   const aoSkip=skipped.find(s=>s.provider==="ai_overviews");
+   const otherCount=skipped.filter(s=>s.provider!=="ai_overviews").length;
+   const skipNote=skipped.length?` · ${[aoSkip?`AI Overviews: ${aoSkip.reason.slice(0,55)}`:null,otherCount?`${otherCount} provider(s) skipped`:null].filter(Boolean).join(", ")}`:"";
    setToast(`Scan complete — ${finishData.mentions}/${finishData.total} mentions${skipNote}`);
    await new Promise(r=>setTimeout(r,800));
    setRefreshKey(k=>k+1);
-   setTimeout(()=>setRefreshKey(k=>k+1),10000);
+   setTimeout(()=>setRefreshKey(k=>k+1),15000);
   }catch(err){setToast(err instanceof Error?err.message:"Scan failed.")}
   finally{setScanning(false);setScanProgress(null);setTimeout(()=>setToast(""),4500)}
  }
