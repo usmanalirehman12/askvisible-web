@@ -44,10 +44,10 @@ function confidence(answers:AnalyzedAnswer[],prompts:string[],providerCount:numb
 export async function runScanForPrompts(brand:{name:string;domain:string},prompts:string[]):Promise<Omit<VisibilityResult,"brand">&{brand:typeof brand}>{
   const providers=configuredProviders();
   if(!providers.length)throw new Error("No AI providers are configured. Add at least one provider API key to .env.local.");
-  // Providers run concurrently with each other, but prompts run sequentially within each
-  // provider — this prevents bursting 3 simultaneous requests at APIs (like Gemini) that
-  // enforce per-key concurrency limits even on paid tiers.
-  const settled=(await Promise.all(providers.map(async provider=>{const results=[];for(const prompt of prompts){try{results.push({ok:true as const,value:await provider.run(prompt)})}catch(error){results.push({ok:false as const,failure:{provider:provider.name,prompt,error:error instanceof Error?error.message:"Provider request failed"} satisfies ProviderFailure})}}return results;}))).flat();
+  // All providers and all prompts run fully concurrently — fastest path to a result within
+  // Vercel's function timeout. Each call has its own AbortSignal timeout so slow providers
+  // are dropped rather than blocking the whole scan.
+  const settled=(await Promise.all(providers.flatMap(provider=>prompts.map(async prompt=>{try{return{ok:true as const,value:await provider.run(prompt)}}catch(error){return{ok:false as const,failure:{provider:provider.name,prompt,error:error instanceof Error?error.message:"Provider request failed"} satisfies ProviderFailure}}})))).flat();
   const failures=settled.filter(x=>!x.ok).map(x=>x.failure); const raw=settled.filter(x=>x.ok).map(x=>x.value);
   const answers=raw.map(a=>({...a,...analyze(a.text,brand.name,brand.domain)}));
   if(!answers.length)throw new Error(`All configured providers failed: ${failures.map(f=>`${f.provider}: ${f.error}`).join("; ")}`);
