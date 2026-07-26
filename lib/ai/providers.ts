@@ -25,47 +25,56 @@ function answer(provider: ProviderName, model: string, prompt: string, text: str
   return { provider, model, prompt, text, citations: [...new Set([...citations, ...urls(text)])].slice(0, 12), tokensIn: usage?.input_tokens ?? usage?.prompt_tokens ?? usage?.promptTokenCount ?? 0, tokensOut: usage?.output_tokens ?? usage?.completion_tokens ?? usage?.candidatesTokenCount ?? 0, latencyMs: Date.now() - started };
 }
 
-// Discovers a working Gemini model+API-version for this key via ListModels + probe.
-// Results are cached per cold start so the probe only runs once.
+// Shared helpers for Gemini model discovery
+async function _gListModels(key: string, ver: string): Promise<string[]> {
+  try {
+    const r = await fetch(`https://generativelanguage.googleapis.com/${ver}/models?key=${key}&pageSize=100`, { signal: AbortSignal.timeout(4_000) });
+    if (!r.ok) return [];
+    const { models = [] } = await r.json().catch(() => ({ models: [] }));
+    return (models as any[]).filter((m: any) => m.supportedGenerationMethods?.includes("generateContent")).map((m: any) => (m.name as string).replace("models/", ""));
+  } catch { return []; }
+}
+function _gSortModels(models: string[]): string[] {
+  return [...models.filter(n => n.includes("flash") && !n.includes("lite")), ...models.filter(n => n.includes("pro") && !n.includes("flash")), ...models.filter(n => n.includes("flash")), ...models].filter((n, i, a) => a.indexOf(n) === i).slice(0, 5);
+}
+async function _gProbe(key: string, model: string, ver: string, tools?: any[]): Promise<boolean> {
+  try {
+    const body: any = { contents: [{ role: "user", parts: [{ text: "hi" }] }], generationConfig: { maxOutputTokens: 1 } };
+    if (tools) body.tools = tools;
+    const r = await fetch(`https://generativelanguage.googleapis.com/${ver}/models/${encodeURIComponent(model)}:generateContent`,
+      { method: "POST", headers: { "x-goog-api-key": key, "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(8_000) });
+    return r.ok;
+  } catch { return false; }
+}
+
+// Discovers working Gemini model+version for regular generateContent. Cached per cold start.
 let _gEndpoint: Promise<{ model: string; ver: string }> | null = null;
 function geminiEndpoint(key: string, preferred: string): Promise<{ model: string; ver: string }> {
   if (_gEndpoint) return _gEndpoint;
   return (_gEndpoint = (async () => {
-    // 1. Fetch model list (try v1 first, fall back to v1beta)
-    let discovered: string[] = [];
-    let listVer = "v1";
-    for (const ver of ["v1", "v1beta"]) {
-      try {
-        const r = await fetch(`https://generativelanguage.googleapis.com/${ver}/models?key=${key}&pageSize=100`, { signal: AbortSignal.timeout(4_000) });
-        if (!r.ok) continue;
-        const { models = [] } = await r.json().catch(() => ({ models: [] }));
-        const usable: string[] = (models as any[])
-          .filter((m: any) => m.supportedGenerationMethods?.includes("generateContent"))
-          .map((m: any) => (m.name as string).replace("models/", ""));
-        if (usable.length) { discovered = usable; listVer = ver; break; }
-      } catch {}
-    }
-    // 2. Sort preference: non-lite flash > pro > any flash > others
-    const sorted = [
-      ...discovered.filter(n => n.includes("flash") && !n.includes("lite")),
-      ...discovered.filter(n => n.includes("pro") && !n.includes("flash")),
-      ...discovered.filter(n => n.includes("flash")),
-      ...discovered,
-    ].filter((n, i, a) => a.indexOf(n) === i).slice(0, 5);
-    // 3. Probe each candidate on listVer then the alternate — first one that responds 200 wins
+    let models: string[] = []; let listVer = "v1";
+    for (const ver of ["v1", "v1beta"]) { const m = await _gListModels(key, ver); if (m.length) { models = m; listVer = ver; break; } }
     const altVer = listVer === "v1" ? "v1beta" : "v1";
-    const probeBody = JSON.stringify({ contents: [{ role: "user", parts: [{ text: "hi" }] }], generationConfig: { maxOutputTokens: 1 } });
-    for (const model of sorted) {
+    for (const model of _gSortModels(models)) { for (const ver of [listVer, altVer]) { if (await _gProbe(key, model, ver)) return { model, ver }; } }
+    return { model: preferred, ver: "v1" };
+  })());
+}
+
+// Discovers working Gemini model+version+tools for Google Search grounding (AI Overviews). Cached per cold start.
+let _gGrounding: Promise<{ model: string; ver: string; tools: any[] }> | null = null;
+function geminiGroundingEndpoint(key: string, preferred: string): Promise<{ model: string; ver: string; tools: any[] }> {
+  if (_gGrounding) return _gGrounding;
+  return (_gGrounding = (async () => {
+    let models: string[] = []; let listVer = "v1";
+    for (const ver of ["v1", "v1beta"]) { const m = await _gListModels(key, ver); if (m.length) { models = m; listVer = ver; break; } }
+    const altVer = listVer === "v1" ? "v1beta" : "v1";
+    const groundingFmts = [[{ googleSearchRetrieval: {} }], [{ google_search: {} }]];
+    for (const model of _gSortModels(models)) {
       for (const ver of [listVer, altVer]) {
-        try {
-          const r = await fetch(`https://generativelanguage.googleapis.com/${ver}/models/${encodeURIComponent(model)}:generateContent`,
-            { method: "POST", headers: { "x-goog-api-key": key, "Content-Type": "application/json" }, body: probeBody, signal: AbortSignal.timeout(5_000) });
-          if (r.ok) return { model, ver };
-        } catch {}
+        for (const tools of groundingFmts) { if (await _gProbe(key, model, ver, tools)) return { model, ver, tools }; }
       }
     }
-    // 4. Nothing worked — fall back to preferred and let the actual call surface the error
-    return { model: preferred, ver: "v1" };
+    return { model: preferred, ver: "v1beta", tools: [{ googleSearchRetrieval: {} }] };
   })());
 }
 
@@ -103,7 +112,7 @@ export function configuredProviders(): Provider[] {
   // prompt and search grounding incurs additional billing on Google's paid tiers.
   if ((process.env.GEMINI_API_KEY||process.env.GOOGLE_GENERATIVE_AI_API_KEY) && process.env.GOOGLE_AI_OVERVIEWS?.trim() === "true") {
     const key=process.env.GEMINI_API_KEY||process.env.GOOGLE_GENERATIVE_AI_API_KEY; const preferred="gemini-1.5-flash";
-    providers.push({name:"ai_overviews",model:preferred,async run(prompt){const started=Date.now();const {model,ver}=await geminiEndpoint(key!,preferred);let d:any;let lastErr:Error=new Error("grounding unavailable");for(const tools of [[{googleSearchRetrieval:{}}],[{google_search:{}}]]){try{d=await postJson(`https://generativelanguage.googleapis.com/${ver}/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({contents:[{role:"user",parts:[{text:SYSTEM+"\n\n"+prompt}]}],tools,generationConfig:{maxOutputTokens:900}})},1,20_000);break;}catch(e){lastErr=e instanceof Error?e:lastErr;}}if(!d)throw lastErr;const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("ai_overviews",model,prompt,text,[],d.usageMetadata,started)}});
+    providers.push({name:"ai_overviews",model:preferred,async run(prompt){const started=Date.now();const {model,ver,tools}=await geminiGroundingEndpoint(key!,preferred);const d=await postJson(`https://generativelanguage.googleapis.com/${ver}/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({contents:[{role:"user",parts:[{text:SYSTEM+"\n\n"+prompt}]}],tools,generationConfig:{maxOutputTokens:900}})},1,20_000);const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("ai_overviews",model,prompt,text,[],d.usageMetadata,started)}});
   }
   return providers;
 }
