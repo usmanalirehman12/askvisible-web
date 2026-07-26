@@ -89,6 +89,7 @@ export default function AppPage(){
     if(fixResult.error){setToast(`Fix failed: ${String(fixResult.error).slice(0,80)}`);setTimeout(()=>setToast(""),7000);}
     else if(fixResult.skipped){setToast("Fixes skipped — ANTHROPIC_API_KEY not found in Vercel env vars");setTimeout(()=>setToast(""),7000);}
     else if(!fixResult.fixesGenerated){setToast(`Fixes returned 0 — Claude may have returned empty JSON`);setTimeout(()=>setToast(""),7000);}
+    else{setToast(`${fixResult.fixesGenerated} AI fix${fixResult.fixesGenerated===1?"":"es"} generated`);setTimeout(()=>setToast(""),5000);}
    });
   }catch(err){setToast(err instanceof Error?err.message:"Scan failed.")}
   finally{setScanning(false);setScanProgress(null);setTimeout(()=>setToast(""),4500)}
@@ -170,7 +171,7 @@ function useFixes(demo:boolean,brand:Brand|undefined,refreshKey:number){
  useEffect(()=>{
   if(demo||!brand)return;
   let cancelled=false;
-  (async()=>{const [{createClient},{getFixes}]=await Promise.all([import("@/lib/supabase/client"),import("@/lib/data/fixes")]);const supabase=createClient();const rows=await getFixes(supabase,brand.id);if(!cancelled)setFixes(rows)})();
+  (async()=>{const r=await fetch(`/api/fixes/list?brandId=${encodeURIComponent(brand.id)}`);const j=await r.json().catch(()=>({}));if(!cancelled)setFixes(j.fixes||[])})();
   return ()=>{cancelled=true};
  },[demo,brand,refreshKey]);
  return fixes;
@@ -280,7 +281,7 @@ function Fixes({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:num
  useEffect(()=>{
   if(demo||!brand){setLoading(false);return}
   let cancelled=false;
-  (async()=>{setLoading(true);const [{createClient},{getFixes}]=await Promise.all([import("@/lib/supabase/client"),import("@/lib/data/fixes")]);const supabase=createClient();const rows=await getFixes(supabase,brand.id);if(!cancelled){setFixes(rows);setLoading(false)}})();
+  (async()=>{setLoading(true);const r=await fetch(`/api/fixes/list?brandId=${encodeURIComponent(brand.id)}`);const j=await r.json().catch(()=>({}));if(!cancelled){setFixes(j.fixes||[]);if(j.rlsError)console.error("Fixes RLS error:",j.rlsError);setLoading(false)}})();
   return ()=>{cancelled=true};
  },[demo,brand,refreshKey]);
 
