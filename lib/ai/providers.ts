@@ -96,7 +96,7 @@ export function configuredProviders(): Provider[] {
   }
   if (process.env.PERPLEXITY_API_KEY) {
     const model=process.env.PERPLEXITY_MODEL || "sonar";
-    providers.push({name:"perplexity",model,async run(prompt){const started=Date.now();const d=await postJson("https://api.perplexity.ai/v1/sonar",{method:"POST",headers:{Authorization:`Bearer ${process.env.PERPLEXITY_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({model,messages:[{role:"system",content:SYSTEM},{role:"user",content:prompt}],max_tokens:900})});return answer("perplexity",model,prompt,d.choices?.[0]?.message?.content||"",d.citations||[],d.usage,started)}});
+    providers.push({name:"perplexity",model,async run(prompt){const started=Date.now();const d=await postJson("https://api.perplexity.ai/chat/completions",{method:"POST",headers:{Authorization:`Bearer ${process.env.PERPLEXITY_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({model,messages:[{role:"system",content:SYSTEM},{role:"user",content:prompt}],max_tokens:900})});return answer("perplexity",model,prompt,d.choices?.[0]?.message?.content||"",d.citations||[],d.usage,started)}});
   }
   if (process.env.ANTHROPIC_API_KEY) {
     const model=process.env.ANTHROPIC_MODEL || "claude-haiku-4-5";
