@@ -29,8 +29,7 @@ function LoginForm() {
       const supabase = createClient();
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       if (signInError) throw signInError;
-      router.push(params.get("next") || "/app");
-      router.refresh();
+      window.location.href = params.get("next") || "/app";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign in failed.");
     } finally {

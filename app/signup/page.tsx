@@ -29,7 +29,7 @@ export default function SignupPage() {
         options: { data: { full_name: fullName } }
       });
       if (signUpError) throw signUpError;
-      if (data.session) { router.push("/app"); router.refresh(); return; }
+      if (data.session) { window.location.href = "/app"; return; }
       setConfirmSent(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign up failed.");
