@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     const [{ data: brandRow }, { data: answers }] = await Promise.all([
       supabase.from("brands").select("name,domain").eq("id", brandId).maybeSingle(),
       supabase.from("answers")
-        .select("engine,raw_answer,brand_mentioned,position,sentiment,prompts(query)")
+        .select("engine,raw_answer,brand_mentioned,position,sentiment")
         .eq("run_id", scanRunId)
         .limit(18)
     ]);
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const mapped = (answers || []).map((a: any) => ({
       provider: a.engine,
       model: "",
-      prompt: a.prompts?.query || "",
+      prompt: "",
       text: a.raw_answer || "",
       citations: [],
       tokensIn: 0,
