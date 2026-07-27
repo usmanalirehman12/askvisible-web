@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Activity, AlertCircle, ArrowDownRight, ArrowLeft, ArrowUpRight, BarChart3, Bell, Check, ChevronDown, CircleHelp, FileText, Gauge, LayoutDashboard, LoaderCircle, LogOut, Menu, Moon, MoreHorizontal, Play, Plus, Radar, Search, Settings, Sparkles, Sun, Target, TrendingUp, Users, WandSparkles, X } from "lucide-react";
+import { Activity, AlertCircle, ArrowDownRight, ArrowLeft, ArrowUpRight, BarChart3, Bell, Check, ChevronDown, CircleHelp, Edit2, FileText, Gauge, LayoutDashboard, LoaderCircle, LogOut, Menu, Moon, MoreHorizontal, Play, Plus, Radar, Search, Settings, Sparkles, Sun, Target, Trash2, TrendingUp, Users, WandSparkles, X } from "lucide-react";
 import { supabaseConfigured } from "@/lib/supabase/config";
 import type { Brand, Competitor, Fix, Prompt, WorkspaceContext } from "@/lib/data/types";
 import type { ScanAnswerRow } from "@/lib/data/stats";
@@ -177,9 +177,35 @@ function useFixes(demo:boolean,brand:Brand|undefined,refreshKey:number){
  return fixes;
 }
 
+type ScanHistoryEntry={runId:string;completedAt:string|null;score:number;mentions:number;total:number};
+function useScanHistory(demo:boolean,brand:Brand|undefined,refreshKey:number){
+ const [history,setHistory]=useState<ScanHistoryEntry[]>([]);
+ useEffect(()=>{
+  if(demo||!brand)return;
+  let cancelled=false;
+  (async()=>{const r=await fetch(`/api/scan-history?brandId=${encodeURIComponent(brand.id)}`);const j=await r.json().catch(()=>({}));if(!cancelled)setHistory(j.history||[])})();
+  return ()=>{cancelled=true};
+ },[demo,brand,refreshKey]);
+ return history;
+}
+
+function Sparkline({data}:{data:{score:number;date:string}[]}){
+ if(data.length<2)return null;
+ const w=180,h=44;
+ const scores=data.map(d=>d.score);
+ const lo=Math.max(0,Math.min(...scores)-8),hi=Math.min(100,Math.max(...scores)+8);
+ const range=hi-lo||1;
+ const pts=data.map((d,i)=>`${(i/(data.length-1))*w},${h-((d.score-lo)/range)*h}`).join(" ");
+ return <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{overflow:"visible",flexShrink:0}}>
+  <polyline points={pts} fill="none" stroke="var(--sky,#0EA5E9)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
+  {data.map((d,i)=>{const x=(i/(data.length-1))*w;const y=h-((d.score-lo)/range)*h;return <circle key={i} cx={x} cy={y} r={i===data.length-1?4:2.5} fill="var(--sky,#0EA5E9)"/>})}
+ </svg>;
+}
+
 function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{demo:boolean;brand?:Brand;refreshKey:number;scan:()=>void;scanning:boolean;setSection:(s:string)=>void;firstName:string}){
  const {scan:latest,loading}=useLatestScan(demo,brand,refreshKey);
  const fixes=useFixes(demo,brand,refreshKey);
+ const history=useScanHistory(demo,brand,refreshKey);
  const [promptCount,setPromptCount]=useState<number|null>(null);
  useEffect(()=>{
   if(demo||!brand)return;
@@ -205,13 +231,16 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
 
  const summary=summarizeScan(latest);
  const byEngine=groupByEngine(latest.answers);
+ const prevScan=history.length>=2?history[history.length-2]:null;
+ const delta=prevScan!=null?summary.score-prevScan.score:null;
+ const sparkData=history.map(h=>({score:h.score,date:h.completedAt||""}));
 
  return <>{header}
-  <ScoreHero score={summary.score} confidence={confidenceLabel(latest.confidence??0)}/>
+  <ScoreHero score={summary.score} confidence={confidenceLabel(latest.confidence??0)} delta={delta} sparkData={sparkData}/>
   <div className="stats-grid">
    <Stat label="Total mentions" value={String(summary.mentions)} sub={`of ${summary.total} answers checked`} icon={Activity}/>
    <Stat label="Average position" value={summary.avgPosition!=null?`#${summary.avgPosition}`:"—"} sub="when mentioned" icon={Target}/>
-   <Stat label="Prompts tracked" value={promptCount!=null?String(promptCount):"…"} sub="active prompts" icon={Search}/>
+   <Stat label="Scans run" value={String(history.length||1)} sub={history.length>1?`first scan ${new Date(history[0]?.completedAt||"").toLocaleDateString()}`:"baseline scan"} icon={Search}/>
    <Stat label="AI engines" value="6" sub="ChatGPT · Gemini · Perplexity · Claude · DeepSeek · AI Overviews" icon={BarChart3}/>
   </div>
   <div className="dashboard-grid">
@@ -230,7 +259,16 @@ function groupByEngine(answers:ScanAnswerRow[]){
 }
 
 function Stat({label,value,trend,sub,confidence,icon:Icon}:{label:string;value:string;trend?:string;sub?:string;confidence?:string;icon:any}){return <article className="stat"><div><span>{label}</span><b>{value}</b>{trend?<small className="up"><ArrowUpRight/>{trend} <em>vs last period</em></small>:<small>{sub}</small>}{confidence&&<span className="confidence-tag">{confidence}</span>}</div><span className="stat-icon"><Icon/></span></article>}
-function ScoreHero({score,trend,confidence}:{score:number|string;trend?:string;confidence?:string}){return <div style={{background:"var(--surface,#fff)",border:"1px solid var(--line)",borderRadius:"10px",padding:"24px 28px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"32px",borderLeft:"4px solid var(--sky,#0EA5E9)"}}><div><span style={{display:"block",fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--sky,#0EA5E9)",marginBottom:"4px"}}>AI Visibility Score</span><span style={{display:"block",fontSize:"76px",fontWeight:800,lineHeight:1,fontFamily:"Outfit,system-ui,sans-serif",color:"var(--sky,#0EA5E9)",letterSpacing:"-4px"}}>{score}</span>{confidence&&<span className="confidence-tag" style={{display:"inline-block",marginTop:"10px"}}>{confidence}</span>}</div>{trend&&<div style={{marginLeft:"auto",textAlign:"right"}}><span style={{display:"block",fontSize:"28px",fontWeight:700,fontFamily:"Outfit,system-ui",color:"var(--em,#10B981)",letterSpacing:"-1px"}}>↑{trend}</span><span style={{fontSize:"12px",color:"var(--muted,#64748B)"}}>vs last period</span></div>}</div>}
+function ScoreHero({score,trend,confidence,delta,sparkData}:{score:number|string;trend?:string;confidence?:string;delta?:number|null;sparkData?:{score:number;date:string}[]}){
+ const showDelta=delta!=null&&delta!==0;
+ const deltaColor=delta!=null&&delta>=0?"var(--em,#10B981)":"#ef4444";
+ const deltaSign=delta!=null&&delta>0?"+":"";
+ return <div style={{background:"var(--surface,#fff)",border:"1px solid var(--line)",borderRadius:"10px",padding:"24px 28px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"32px",borderLeft:"4px solid var(--sky,#0EA5E9)"}}>
+  <div><span style={{display:"block",fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--sky,#0EA5E9)",marginBottom:"4px"}}>AI Visibility Score</span><span style={{display:"block",fontSize:"76px",fontWeight:800,lineHeight:1,fontFamily:"Outfit,system-ui,sans-serif",color:"var(--sky,#0EA5E9)",letterSpacing:"-4px"}}>{score}</span>{confidence&&<span className="confidence-tag" style={{display:"inline-block",marginTop:"10px"}}>{confidence}</span>}</div>
+  {sparkData&&sparkData.length>=2&&<div style={{marginLeft:"auto",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"8px"}}><Sparkline data={sparkData}/>{showDelta&&<span style={{fontSize:"20px",fontWeight:700,fontFamily:"Outfit,system-ui",color:deltaColor,letterSpacing:"-0.5px"}}>{deltaSign}{delta} pts vs last scan</span>}{sparkData.length>0&&<span style={{fontSize:"11px",color:"var(--muted,#64748B)"}}>{sparkData.length} scan{sparkData.length!==1?"s":""} tracked</span>}</div>}
+  {trend&&!sparkData&&<div style={{marginLeft:"auto",textAlign:"right"}}><span style={{display:"block",fontSize:"28px",fontWeight:700,fontFamily:"Outfit,system-ui",color:"var(--em,#10B981)",letterSpacing:"-1px"}}>↑{trend}</span><span style={{fontSize:"12px",color:"var(--muted,#64748B)"}}>vs last period</span></div>}
+ </div>;
+}
 function PanelHead({title,sub,action}:{title:string;sub?:string;action?:React.ReactNode}){return <div className="panel-head"><div><h3>{title}</h3>{sub&&<p>{sub}</p>}</div>{action||<button><MoreHorizontal/></button>}</div>}
 function DemoPromptTable({short=false}:{short?:boolean}){let rows=short?demoPrompts.slice(0,4):demoPrompts;return <div className="table-wrap"><table><thead><tr><th>Prompt</th><th>Engine</th><th>Status</th><th>Position</th><th>Sentiment</th><th>Change</th></tr></thead><tbody>{rows.map(p=><tr key={p.q}><td><b>{p.q}</b></td><td>{p.engine}</td><td><span className={p.status==="Mentioned"?"status yes":"status no"}>{p.status}</span></td><td>{p.position?`#${p.position}`:"—"}</td><td>{p.sentiment}</td><td><span className={p.change>0?"up":p.change<0?"down":""}>{p.change>0?<ArrowUpRight/>:p.change<0?<ArrowDownRight/>:"—"}{p.change!==0&&Math.abs(p.change)}</span></td></tr>)}</tbody></table></div>}
 // Real mode has no "Change" column — that needs comparing against a previous scan, which
@@ -257,33 +295,92 @@ function Prompts({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:n
  const [modal,setModal]=useState(false);
  const [prompts,setPrompts]=useState<Prompt[]>([]);
  const [loading,setLoading]=useState(!demo);
+ const [editId,setEditId]=useState<string|null>(null);
+ const [editText,setEditText]=useState("");
+ const [newQuery,setNewQuery]=useState("");
+ const [saving,setSaving]=useState(false);
  const {scan:latest}=useLatestScan(demo,brand,refreshKey);
+
+ async function loadPrompts(){
+  if(!brand)return;
+  const r=await fetch(`/api/prompts?brandId=${encodeURIComponent(brand.id)}`);
+  const j=await r.json().catch(()=>({}));
+  setPrompts(j.prompts||[]);
+ }
 
  useEffect(()=>{
   if(demo||!brand){setLoading(false);return}
   let cancelled=false;
-  (async()=>{setLoading(true);const [{createClient},{getPrompts}]=await Promise.all([import("@/lib/supabase/client"),import("@/lib/data/prompts")]);const supabase=createClient();const rows=await getPrompts(supabase,brand.id);if(!cancelled){setPrompts(rows);setLoading(false)}})();
+  (async()=>{setLoading(true);const r=await fetch(`/api/prompts?brandId=${encodeURIComponent(brand.id)}`);const j=await r.json().catch(()=>({}));if(!cancelled){setPrompts(j.prompts||[]);setLoading(false)}})();
   return ()=>{cancelled=true};
  },[demo,brand,refreshKey]);
+
+ async function saveEdit(promptId:string){
+  if(!editText.trim())return;
+  setSaving(true);
+  await fetch("/api/prompts",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({promptId,query:editText})});
+  setSaving(false);setEditId(null);await loadPrompts();
+ }
+ async function deletePrompt(promptId:string){
+  if(!confirm("Remove this prompt? It won't be used in future scans."))return;
+  await fetch("/api/prompts",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({promptId})});
+  await loadPrompts();
+ }
+ async function addPrompt(e:React.FormEvent){
+  e.preventDefault();if(!brand||!newQuery.trim())return;
+  setSaving(true);
+  await fetch("/api/prompts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({brandId:brand.id,query:newQuery.trim()})});
+  setSaving(false);setNewQuery("");setModal(false);await loadPrompts();
+ }
 
  if(demo)return <><div className="page-title"><div><span className="overline">MONITORING</span><h1>Tracked prompts</h1><p>Questions your customers ask AI engines.</p></div><button className="scan-btn" onClick={()=>setModal(true)}><Plus/>Add prompt</button></div><div className="filterbar"><div><Search/><input placeholder="Search prompts…"/></div><button>All engines <ChevronDown/></button><button>All statuses <ChevronDown/></button></div><article className="panel prompt-full"><DemoPromptTable/></article>{modal&&<div className="modal-back"><div className="modal"><button className="modal-x" onClick={()=>setModal(false)}><X/></button><span className="feature-icon"><Search/></span><h2>Add a buyer prompt</h2><p>Track a question your customers ask before choosing a product.</p><label>Prompt<input autoFocus placeholder="e.g. Best analytics tools for startups"/></label><label>Engines<div className="check-grid">{engines.map(e=><span key={e.name}><Check/>{e.name}</span>)}</div></label><button className="button" onClick={()=>setModal(false)}>Add prompt</button></div></div>}</>;
 
  if(!brand)return <div className="page-title"><div><span className="overline">MONITORING</span><h1>Tracked prompts</h1><p>Add a client first — its buyer-intent prompts are generated automatically.</p></div></div>;
 
- return <><div className="page-title"><div><span className="overline">MONITORING</span><h1>Tracked prompts for {brand.name}</h1><p>Each question is checked against every AI engine. Run a scan to see where you appear.</p></div></div>
-  {loading?<p>Loading…</p>:<article className="panel prompt-full">{latest?<PromptMatrix prompts={prompts} answers={latest.answers}/>:<div className="table-wrap"><table><thead><tr><th>Prompt</th><th>Schedule</th></tr></thead><tbody>{prompts.map(p=><tr key={p.id}><td><b>{p.query}</b></td><td>{p.frequency}</td></tr>)}</tbody></table></div>}</article>}
+ return <><div className="page-title"><div><span className="overline">MONITORING</span><h1>Tracked prompts for {brand.name}</h1><p>Each question is checked against every AI engine. Run a scan to see where you appear.</p></div><button className="scan-btn" onClick={()=>setModal(true)}><Plus/>Add prompt</button></div>
+  {loading?<p>Loading…</p>:<>
+   {latest&&<article className="panel prompt-full" style={{marginBottom:"14px"}}><PromptMatrix prompts={prompts} answers={latest.answers}/></article>}
+   <article className="panel prompt-full">
+    <div className="panel-head"><div><h3>Prompt list</h3><p>Click any prompt to edit. Changes take effect on the next scan.</p></div></div>
+    <div style={{padding:"0 0 8px"}}>
+     {prompts.map(p=><div key={p.id} style={{display:"flex",alignItems:"flex-start",gap:"10px",padding:"10px 16px",borderBottom:"1px solid var(--line)"}}>
+      {editId===p.id
+       ?<><textarea autoFocus value={editText} onChange={e=>setEditText(e.target.value)} rows={2} style={{flex:1,resize:"vertical",fontSize:"13px",padding:"6px 8px",borderRadius:"6px",border:"1px solid var(--sky,#0EA5E9)",fontFamily:"inherit"}} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();saveEdit(p.id)}if(e.key==="Escape")setEditId(null)}}/><button className="button" style={{padding:"5px 12px",fontSize:"12px"}} onClick={()=>saveEdit(p.id)} disabled={saving}>{saving?"…":"Save"}</button><button className="icon-btn" onClick={()=>setEditId(null)} title="Cancel"><X/></button></>
+       :<><span style={{flex:1,fontSize:"13px",lineHeight:1.5,cursor:"pointer",color:"var(--text)"}} onClick={()=>{setEditId(p.id);setEditText(p.query)}}>{p.query}</span><button className="icon-btn" title="Edit" onClick={()=>{setEditId(p.id);setEditText(p.query)}}><Edit2 size={13}/></button><button className="icon-btn" title="Remove" onClick={()=>deletePrompt(p.id)}><Trash2 size={13}/></button></>}
+     </div>)}
+     {!prompts.length&&<p style={{padding:"14px 16px",color:"var(--muted)",fontSize:"13px"}}>No prompts yet.</p>}
+    </div>
+   </article>
+  </>}
+  {modal&&<div className="modal-back"><div className="modal"><button className="modal-x" onClick={()=>setModal(false)}><X/></button><span className="feature-icon"><Search/></span><h2>Add a prompt</h2><p>Write a question a buyer would ask when researching your category.</p><form onSubmit={addPrompt}><label>Prompt<input autoFocus required value={newQuery} onChange={e=>setNewQuery(e.target.value)} placeholder="e.g. Best greeting cards to send for birthdays"/></label><button className="button" disabled={saving}>{saving?"Adding…":"Add prompt"}</button></form></div></div>}
  </>;
 }
 
 function Fixes({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:number}){
  const [fixes,setFixes]=useState<Fix[]>([]);
  const [loading,setLoading]=useState(!demo);
+ const [updatingId,setUpdatingId]=useState<string|null>(null);
+
+ async function loadFixes(){
+  if(!brand)return;
+  const r=await fetch(`/api/fixes/list?brandId=${encodeURIComponent(brand.id)}`);
+  const j=await r.json().catch(()=>({}));
+  if(j.rlsError)console.error("Fixes RLS error:",j.rlsError);
+  setFixes(j.fixes||[]);
+ }
+
  useEffect(()=>{
   if(demo||!brand){setLoading(false);return}
   let cancelled=false;
   (async()=>{setLoading(true);const r=await fetch(`/api/fixes/list?brandId=${encodeURIComponent(brand.id)}`);const j=await r.json().catch(()=>({}));if(!cancelled){setFixes(j.fixes||[]);if(j.rlsError)console.error("Fixes RLS error:",j.rlsError);setLoading(false)}})();
   return ()=>{cancelled=true};
  },[demo,brand,refreshKey]);
+
+ async function setStatus(fixId:string,status:string){
+  setUpdatingId(fixId);
+  await fetch("/api/fixes/status",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({fixId,status})});
+  setUpdatingId(null);await loadFixes();
+ }
 
  if(demo)return <><div className="page-title"><div><span className="overline">AI FIX GENERATOR</span><h1>Turn gaps into growth</h1><p>Actionable recommendations based on where competitors beat you.</p></div></div><div className="fix-grid">{[{type:"CONTENT",title:"Create an alternatives comparison page",desc:"You’re absent from 8 high-intent prompts where direct competitors have detailed comparison pages.",lift:"12–18%",effort:"~25 min",color:"purple"},{type:"AUTHORITY",title:"Earn mentions from 3 cited sources",desc:"These publications appear in 41% of winning answers but don't currently mention Acme.",lift:"8–14%",effort:"~2 hrs",color:"green"},{type:"TECHNICAL",title:"Add SoftwareApplication schema",desc:"Clarify your product category, pricing, features, and reviews for answer engines.",lift:"4–7%",effort:"~10 min",color:"blue"}].map((f,i)=><article className="fix-card" key={f.title}><div><span className={`fix-type ${f.color}`}>{f.type}</span><em>#{i+1}</em></div><span className="big-fix-icon"><WandSparkles/></span><h3>{f.title}</h3><p>{f.desc}</p><div className="lift"><span>Estimated lift<b>{f.lift}</b></span><span>Time to implement<b>{f.effort}</b></span></div><button className="button">Generate fix <Sparkles/></button></article>)}</div></>;
 
@@ -293,8 +390,12 @@ function Fixes({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:num
 
  const colorFor=(category:string)=>({schema:"blue",content:"purple",authority:"green",reviews:"orange",gbp:"orange"} as Record<string,string>)[category]||"purple";
 
+ const statusColor:Record<string,string>={pending:"var(--muted,#64748B)",implementing:"var(--sky,#0EA5E9)",done:"var(--em,#10B981)"};
+ const statusLabel:Record<string,string>={pending:"Pending",implementing:"Implementing",done:"Done ✓"};
+
  return <><div className="page-title"><div><span className="overline">AI FIX GENERATOR</span><h1>Turn gaps into growth</h1><p>Claude-generated recommendations for {brand.name}, based on your most recent scan.</p></div></div>
-  <div className="fix-grid">{fixes.map((f,i)=><article className="fix-card" key={f.id}><div><span className={`fix-type ${colorFor(f.category)}`}>{f.category.toUpperCase()}</span><em>#{i+1}</em></div><span className="big-fix-icon"><WandSparkles/></span><h3>{f.title}</h3><p>{f.rationale}</p>{f.generated_content&&<FixContent content={f.generated_content}/>}<div className="lift"><span>Estimated lift<b>+{f.impact_low}–{f.impact_high}%</b></span><span>Status<b>{f.status}</b></span></div></article>)}</div>
+  <div className="fix-grid">{fixes.map((f,i)=>{const busy=updatingId===f.id;const st=f.status||"pending";return <article className="fix-card" key={f.id}><div><span className={`fix-type ${colorFor(f.category)}`}>{f.category.toUpperCase()}</span><em>#{i+1}</em></div><span className="big-fix-icon"><WandSparkles/></span><h3>{f.title}</h3><p>{f.rationale}</p>{f.generated_content&&<FixContent content={f.generated_content}/>}<div className="lift"><span>Estimated lift<b>+{f.impact_low}–{f.impact_high}%</b></span><span>Status<b style={{color:statusColor[st]||"var(--muted)"}}>{statusLabel[st]||st}</b></span></div><div style={{display:"flex",gap:"6px",marginTop:"10px"}}>{(["pending","implementing","done"] as const).map(s=><button key={s} onClick={()=>setStatus(f.id,s)} disabled={busy||st===s} style={{flex:1,padding:"5px 0",fontSize:"11px",borderRadius:"6px",border:`1px solid ${st===s?statusColor[s]:"var(--line)"}`,background:st===s?statusColor[s]:"transparent",color:st===s?"#fff":"var(--muted)",cursor:st===s?"default":"pointer",fontWeight:st===s?700:400,transition:"all 0.15s"}}>{busy&&st!==s?"…":statusLabel[s]}</button>)}</div></article>})}
+  </div>
  </>;
 }
 
