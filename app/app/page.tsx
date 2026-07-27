@@ -127,10 +127,10 @@ function BrandSwitcher({demo,ctx,onBrandAdded}:{demo:boolean;ctx:WorkspaceContex
  async function addClient(e:React.FormEvent){
   e.preventDefault();if(!ctx)return;setSaving(true);setError("");
   try{
-   const [{createClient},{createBrand}]=await Promise.all([import("@/lib/supabase/client"),import("@/lib/data/workspace")]);
-   const supabase=createClient();
-   const brand=await createBrand(supabase,ctx.workspaceId,name,domain.replace(/^https?:\/\//,"").replace(/\/$/,""));
-   onBrandAdded(brand);setName("");setDomain("");setModal(false);
+   const r=await fetch("/api/brands",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspaceId:ctx.workspaceId,name,domain:domain.replace(/^https?:\/\//,"").replace(/\/$/,"")})});
+   const j=await r.json().catch(()=>({}));
+   if(!r.ok||!j.brand)throw new Error(j.error||"Couldn't add that client.");
+   onBrandAdded(j.brand);setName("");setDomain("");setModal(false);
   }catch(err){setError(err instanceof Error?err.message:"Couldn't add that client.")}
   finally{setSaving(false)}
  }

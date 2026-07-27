@@ -1,6 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { generateBuyerPrompts } from "@/lib/ai/buyer-prompts";
-import { createPrompts } from "./prompts";
 import type { Brand, WorkspaceContext } from "./types";
 
 // v1 simplification: a user can belong to multiple workspaces (schema supports it via
@@ -32,16 +30,10 @@ export async function getWorkspaceContext(supabase: SupabaseClient): Promise<Wor
   };
 }
 
-// Auto-generates the same 3 buyer-intent prompts the public checker generates on the fly
-// (generateBuyerPrompts), but persists them as real, editable rows this time instead of
-// throwing them away after one ephemeral check — this is what makes a scan against this
-// brand meaningful the moment it's created, not just an empty shell waiting for the user to
-// hand-write questions first.
+// Inserts the brand row only. Prompt generation is handled server-side in /api/brands
+// so it can call Claude with ANTHROPIC_API_KEY (not available in the browser).
 export async function createBrand(supabase: SupabaseClient, workspaceId: string, name: string, domain: string): Promise<Brand> {
   const { data, error } = await supabase.from("brands").insert({ workspace_id: workspaceId, name, domain }).select().single();
   if (error) throw new Error(error.message || error.details || "Database error inserting brand");
-  const brand = data as Brand;
-  const prompts = generateBuyerPrompts({ name: brand.name, title: "", description: "" });
-  await createPrompts(supabase, brand.id, prompts);
-  return brand;
+  return data as Brand;
 }
