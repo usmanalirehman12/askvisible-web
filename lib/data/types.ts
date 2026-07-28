@@ -5,6 +5,8 @@ export type Brand = {
   domain: string;
   description: string | null;
   created_at: string;
+  scan_frequency?: "weekly" | "monthly" | "off";
+  scan_day?: number;
 };
 
 export type Competitor = {

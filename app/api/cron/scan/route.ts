@@ -10,6 +10,15 @@ import { saveFixes } from "@/lib/data/fixes";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
+function shouldScanToday(brand: { scan_frequency?: string; scan_day?: number }): boolean {
+  const freq = brand.scan_frequency ?? "weekly";
+  if (freq === "off") return false;
+  const now = new Date();
+  if (freq === "monthly") return now.getUTCDate() === (brand.scan_day ?? 1);
+  // weekly (default): scan_day 0=Sun … 6=Sat, default Monday=1
+  return now.getUTCDay() === (brand.scan_day ?? 1);
+}
+
 export async function GET(request: Request) {
   // Vercel sends Authorization: Bearer <CRON_SECRET> on scheduled invocations.
   // Manual test calls must include the same header.
@@ -22,7 +31,7 @@ export async function GET(request: Request) {
 
   const { data: brands, error: brandsErr } = await supabase
     .from("brands")
-    .select("id, name, domain, workspace_id");
+    .select("id, name, domain, workspace_id, scan_frequency, scan_day");
 
   if (brandsErr) return NextResponse.json({ error: brandsErr.message }, { status: 500 });
   if (!brands?.length) return NextResponse.json({ ran: 0, results: [] });
@@ -30,6 +39,10 @@ export async function GET(request: Request) {
   const results: { brand: string; score?: number; mentions?: number; fixes?: number; skipped?: string; error?: string }[] = [];
 
   for (const brand of brands) {
+    if (!shouldScanToday(brand)) {
+      results.push({ brand: brand.name, skipped: `not due (${brand.scan_frequency ?? "weekly"})` });
+      continue;
+    }
     try {
       const scan = await runAndSaveScan(supabase, brand.workspace_id, brand);
 

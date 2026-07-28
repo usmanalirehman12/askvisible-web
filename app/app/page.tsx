@@ -115,7 +115,7 @@ export default function AppPage(){
    </div>
   </aside>
   <section className="app-content"><header className="app-header"><button className="menu-btn" onClick={()=>setOpen(true)}><Menu/></button><div className="header-search"><Search/><input placeholder="Search prompts, reports, fixes…"/><kbd>⌘ K</kbd></div><div className="header-actions"><button className="icon-btn"><Bell/><i/></button><button className="icon-btn theme-toggle" onClick={toggleTheme} title={theme==='light'?'Switch to dark mode':'Switch to light mode'} aria-label="Toggle theme">{theme==='light'?<Moon size={18}/>:<Sun size={18}/>}</button><button className="scan-btn" onClick={scan} disabled={scanning}>{scanning?<LoaderCircle className="spin"/>:<Play/>}{scanning?(scanProgress?`${scanProgress.done}/${scanProgress.total} prompts…`:"Starting…"):"Run scan"}</button></div></header>
-    <div className="app-page">{section==="overview"?<Overview demo={demo} brand={activeBrand} refreshKey={refreshKey} scan={scan} scanning={scanning} setSection={setSection} firstName={firstName}/>:section==="prompts"?<Prompts demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:section==="fixes"?<Fixes demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:section==="competitors"?<Competitors demo={demo} brand={activeBrand}/>:section==="reports"?<Reports/>:<SettingsPage/>}</div>
+    <div className="app-page">{section==="overview"?<Overview demo={demo} brand={activeBrand} refreshKey={refreshKey} scan={scan} scanning={scanning} setSection={setSection} firstName={firstName}/>:section==="prompts"?<Prompts demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:section==="fixes"?<Fixes demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:section==="competitors"?<Competitors demo={demo} brand={activeBrand}/>:section==="reports"?<Reports/>:<SettingsPage demo={demo} brand={activeBrand} ctx={ctx}/>}</div>
   </section>
  </main>
 }
@@ -450,4 +450,54 @@ function Competitors({demo,brand}:{demo:boolean;brand?:Brand}){
 }
 
 function Reports(){return <><div className="page-title"><div><span className="overline">REPORTS</span><h1>Visibility reports</h1><p>Share clear progress with your team and clients.</p></div><button className="scan-btn"><Plus/>Create report</button></div><div className="report-grid">{["June 2026 visibility report","Q2 executive summary","Competitor benchmark — June"].map((r,i)=><article className="panel report-card" key={r}><span className="report-icon"><FileText/></span><div><small>{i===0?"MONTHLY":"CUSTOM"}</small><h3>{r}</h3><p>Generated {i*7+2} days ago · PDF</p></div><button><MoreHorizontal/></button><div className="report-score"><span>Visibility</span><b>{67-i*4}%</b></div><button className="button outline">Open report</button></article>)}</div></>}
-function SettingsPage(){return <><div className="page-title"><div><span className="overline">SETTINGS</span><h1>Workspace settings</h1><p>Manage your brand, alerts, team, and subscription.</p></div></div><div className="settings-grid"><article className="panel settings-nav"><button className="active">Brand profile</button><button>Notifications</button><button>Team members</button><button>Billing & usage</button><button>Integrations</button></article><article className="panel settings-form"><h3>Brand profile</h3><p>Used to identify mentions and compare your market position.</p><label>Brand name<input defaultValue="Acme Software"/></label><label>Website<input defaultValue="https://acme.co"/></label><label>Brand description<textarea defaultValue="AI-powered workflow software for growing SaaS teams."/></label><button className="button">Save changes</button></article></div></>}
+const WEEK_DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const FREQ_LABEL:{[k:string]:string}={weekly:"Weekly",monthly:"Monthly",off:"Off (manual only)"};
+
+function SettingsPage({demo,brand,ctx}:{demo:boolean;brand?:Brand;ctx:WorkspaceContext|null}){
+ const [tab,setTab]=useState("schedule");
+ const [frequency,setFrequency]=useState<"weekly"|"monthly"|"off">("weekly");
+ const [scanDay,setScanDay]=useState(1);
+ const [saving,setSaving]=useState(false);
+ const [saved,setSaved]=useState(false);
+ useEffect(()=>{if(brand){setFrequency(brand.scan_frequency||"weekly");setScanDay(brand.scan_day??1)}},[brand]);
+ async function saveSchedule(){if(!brand)return;setSaving(true);await fetch("/api/brands/settings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({brandId:brand.id,scan_frequency:frequency,scan_day:scanDay})});setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2500)}
+ const nextScanLabel=frequency==="weekly"?`Every ${WEEK_DAYS[scanDay]} at 06:00 UTC`:frequency==="monthly"?`Day ${scanDay} of each month at 06:00 UTC`:"Disabled — use Run scan button";
+ return <><div className="page-title"><div><span className="overline">SETTINGS</span><h1>Workspace settings</h1><p>Manage scan schedule, brand profile, and team.</p></div></div>
+  <div className="settings-grid">
+   <article className="panel settings-nav">
+    <button className={tab==="schedule"?"active":""} onClick={()=>setTab("schedule")}><Radar/>Scan schedule</button>
+    <button className={tab==="brand"?"active":""} onClick={()=>setTab("brand")}><Target/>Brand profile</button>
+    <button><Bell/>Notifications</button>
+    <button><Users/>Team members</button>
+    <button><BarChart3/>Billing &amp; usage</button>
+   </article>
+   <article className="panel settings-form">
+    {tab==="schedule"&&<>
+     <h3>Automated scan schedule</h3>
+     <p style={{marginBottom:"20px"}}>Set how often your brand is scanned automatically. The <b>Run scan</b> button always triggers an immediate scan regardless of this setting.</p>
+     <label style={{display:"block",fontWeight:600,fontSize:"13px",marginBottom:"8px"}}>Frequency</label>
+     <div style={{display:"flex",gap:"8px",marginBottom:"22px"}}>
+      {(["weekly","monthly","off"] as const).map(f=><button key={f} onClick={()=>setFrequency(f)} style={{flex:1,padding:"10px 6px",borderRadius:"8px",border:`2px solid ${frequency===f?"var(--sky,#0EA5E9)":"var(--line)"}`,background:frequency===f?"color-mix(in srgb,var(--sky,#0EA5E9) 12%,transparent)":"transparent",color:frequency===f?"var(--sky,#0EA5E9)":"var(--text)",fontWeight:frequency===f?700:400,fontSize:"13px",cursor:"pointer",transition:"all .15s"}}>{FREQ_LABEL[f]}</button>)}
+     </div>
+     {frequency!=="off"&&<>
+      <label style={{display:"block",fontWeight:600,fontSize:"13px",marginBottom:"8px"}}>{frequency==="weekly"?"Day of week":"Day of month"}</label>
+      {frequency==="weekly"
+       ?<div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginBottom:"18px"}}>{WEEK_DAYS.map((d,i)=><button key={d} onClick={()=>setScanDay(i)} style={{padding:"7px 11px",borderRadius:"7px",border:`2px solid ${scanDay===i?"var(--sky,#0EA5E9)":"var(--line)"}`,background:scanDay===i?"color-mix(in srgb,var(--sky,#0EA5E9) 12%,transparent)":"transparent",color:scanDay===i?"var(--sky,#0EA5E9)":"var(--text)",fontWeight:scanDay===i?700:400,fontSize:"12px",cursor:"pointer",transition:"all .15s"}}>{d.slice(0,3)}</button>)}</div>
+       :<div style={{display:"flex",gap:"5px",flexWrap:"wrap",marginBottom:"18px"}}>{Array.from({length:28},(_,i)=>i+1).map(d=><button key={d} onClick={()=>setScanDay(d)} style={{width:"36px",height:"36px",borderRadius:"7px",border:`2px solid ${scanDay===d?"var(--sky,#0EA5E9)":"var(--line)"}`,background:scanDay===d?"color-mix(in srgb,var(--sky,#0EA5E9) 12%,transparent)":"transparent",color:scanDay===d?"var(--sky,#0EA5E9)":"var(--text)",fontWeight:scanDay===d?700:400,fontSize:"12px",cursor:"pointer",transition:"all .15s"}}>{d}</button>)}</div>}
+     </>}
+     <div style={{background:"var(--bg)",border:"1px solid var(--line)",borderRadius:"8px",padding:"10px 14px",fontSize:"12px",color:"var(--muted)",marginBottom:"20px"}}>
+      {frequency==="off"?<span>Automated scans paused — saves all scan tokens. Trigger scans manually when needed.</span>:<span>Next scheduled scan: <b style={{color:"var(--sky,#0EA5E9)"}}>{nextScanLabel}</b></span>}
+     </div>
+     {!demo&&brand?<button className="button" onClick={saveSchedule} disabled={saving} style={{minWidth:"140px"}}>{saving?"Saving…":saved?"Saved ✓":"Save schedule"}</button>:<button className="button" disabled>Save schedule</button>}
+    </>}
+    {tab==="brand"&&<>
+     <h3>Brand profile</h3>
+     <p>Used to identify mentions and compare your market position.</p>
+     <label>Brand name<input defaultValue={demo?"Acme Software":(brand?.name||"")} readOnly={!demo&&!!brand}/></label>
+     <label>Website<input defaultValue={demo?"acme.co":(brand?.domain||"")} readOnly={!demo&&!!brand}/></label>
+     <label>Brand description<textarea defaultValue={demo?"AI-powered workflow software for growing SaaS teams.":(brand?.description||"")} rows={3}/></label>
+     <button className="button">Save changes</button>
+    </>}
+   </article>
+  </div></>;
+}
