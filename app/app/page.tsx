@@ -486,7 +486,7 @@ function SettingsPage({demo,brand,ctx}:{demo:boolean;brand?:Brand;ctx:WorkspaceC
        :<div style={{display:"flex",gap:"5px",flexWrap:"wrap",marginBottom:"18px"}}>{Array.from({length:28},(_,i)=>i+1).map(d=><button key={d} onClick={()=>setScanDay(d)} style={{width:"36px",height:"36px",borderRadius:"7px",border:`2px solid ${scanDay===d?"var(--sky,#0EA5E9)":"var(--line)"}`,background:scanDay===d?"color-mix(in srgb,var(--sky,#0EA5E9) 12%,transparent)":"transparent",color:scanDay===d?"var(--sky,#0EA5E9)":"var(--text)",fontWeight:scanDay===d?700:400,fontSize:"12px",cursor:"pointer",transition:"all .15s"}}>{d}</button>)}</div>}
      </>}
      <div style={{background:"var(--bg)",border:"1px solid var(--line)",borderRadius:"8px",padding:"10px 14px",fontSize:"12px",color:"var(--muted)",marginBottom:"20px"}}>
-      {frequency==="off"?<span>Automated scans paused — saves all scan tokens. Trigger scans manually when needed.</span>:<span>Next scheduled scan: <b style={{color:"var(--sky,#0EA5E9)"}}>{nextScanLabel}</b></span>}
+      {frequency==="off"?<span>Automated scans are off. Use the <b>Run scan</b> button whenever you want a fresh report.</span>:<span>Next scheduled scan: <b style={{color:"var(--sky,#0EA5E9)"}}>{nextScanLabel}</b></span>}
      </div>
      {!demo&&brand?<button className="button" onClick={saveSchedule} disabled={saving} style={{minWidth:"140px"}}>{saving?"Saving…":saved?"Saved ✓":"Save schedule"}</button>:<button className="button" disabled>Save schedule</button>}
     </>}
