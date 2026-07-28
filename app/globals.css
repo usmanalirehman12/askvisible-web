@@ -400,18 +400,30 @@ td .up,td .down{display:flex;align-items:center}td svg{width:12px}
 .share-bars i{height:8px;background:var(--line);border-radius:9px}
 .share-bars i b{display:block;background:var(--sky);height:100%;border-radius:9px}
 
-/* Reports */
-.report-card{display:grid;grid-template-columns:auto 1fr auto;gap:11px;align-items:center}
-.report-icon{width:38px;height:38px;border-radius:8px;background:var(--sky-d);color:var(--sky);display:grid;place-items:center}
-.report-icon svg{width:17px}
-.report-card small{font-size:10px;color:var(--sky);font-weight:700}
-.report-card h3{font:700 13px 'Outfit',system-ui;margin:3px 0;color:var(--ink)}
-.report-card p{font-size:12px;color:var(--muted);margin:0}
-.report-card>button{border:0;background:transparent;cursor:pointer}
-.report-card>button svg{width:15px}
-.report-score{grid-column:1/-1;border-top:1px solid var(--line);padding-top:14px;display:flex;justify-content:space-between;font-size:12px}
-.report-score b{font-size:17px}
-.report-card .button{grid-column:1/-1;font-size:11px}
+/* Reports — scan history cards */
+.report-card{display:flex;flex-direction:column;cursor:pointer;transition:box-shadow .15s,transform .1s}
+.report-card:hover{box-shadow:0 4px 24px rgba(14,165,233,.15);transform:translateY(-1px)}
+.button.outline{background:var(--surface)!important;color:var(--sky)!important;border:1.5px solid var(--sky)!important}
+/* Report viewer modal */
+.rv-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100;display:flex;align-items:flex-start;justify-content:center;padding:24px;overflow-y:auto}
+.rv-panel{background:var(--surface);border-radius:14px;width:100%;max-width:860px;margin:auto;box-shadow:0 25px 80px rgba(0,0,0,.4)}
+.rv-actions{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--surface);border-radius:14px 14px 0 0}
+.rv-header{background:#0F172A;padding:32px 36px}
+.rv-section{padding:24px 36px;border-bottom:1px solid var(--line)}
+.rv-section-title{font:700 11px 'Outfit',system-ui;letter-spacing:1.2px;text-transform:uppercase;color:var(--sky);margin-bottom:16px}
+.rv-footer{padding:20px 36px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);border-radius:0 0 14px 14px}
+/* Print / PDF export */
+@media print{
+  .sidebar,.app-header,.page-title,.report-grid{display:none!important}
+  .rv-overlay{position:static!important;background:none!important;padding:0!important;overflow:visible!important;display:block!important}
+  .rv-panel{box-shadow:none!important;border-radius:0!important;max-width:100%!important;width:100%!important}
+  .no-print{display:none!important}
+  .app-content{margin-left:0!important;width:100%!important;min-height:0!important}
+  .app-page{padding:0!important;max-width:100%!important}
+  body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .rv-header{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .rv-section{page-break-inside:avoid}
+}
 
 /* Settings */
 .settings-grid{display:grid;grid-template-columns:220px 1fr;gap:14px}

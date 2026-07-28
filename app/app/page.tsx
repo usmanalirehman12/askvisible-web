@@ -115,7 +115,7 @@ export default function AppPage(){
    </div>
   </aside>
   <section className="app-content"><header className="app-header"><button className="menu-btn" onClick={()=>setOpen(true)}><Menu/></button><div className="header-search"><Search/><input placeholder="Search prompts, reports, fixes…"/><kbd>⌘ K</kbd></div><div className="header-actions"><button className="icon-btn"><Bell/><i/></button><button className="icon-btn theme-toggle" onClick={toggleTheme} title={theme==='light'?'Switch to dark mode':'Switch to light mode'} aria-label="Toggle theme">{theme==='light'?<Moon size={18}/>:<Sun size={18}/>}</button><button className="scan-btn" onClick={scan} disabled={scanning}>{scanning?<LoaderCircle className="spin"/>:<Play/>}{scanning?(scanProgress?`${scanProgress.done}/${scanProgress.total} prompts…`:"Starting…"):"Run scan"}</button></div></header>
-    <div className="app-page">{section==="overview"?<Overview demo={demo} brand={activeBrand} refreshKey={refreshKey} scan={scan} scanning={scanning} setSection={setSection} firstName={firstName}/>:section==="prompts"?<Prompts demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:section==="fixes"?<Fixes demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:section==="competitors"?<Competitors demo={demo} brand={activeBrand}/>:section==="reports"?<Reports/>:<SettingsPage demo={demo} brand={activeBrand} ctx={ctx}/>}</div>
+    <div className="app-page">{section==="overview"?<Overview demo={demo} brand={activeBrand} refreshKey={refreshKey} scan={scan} scanning={scanning} setSection={setSection} firstName={firstName}/>:section==="prompts"?<Prompts demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:section==="fixes"?<Fixes demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:section==="competitors"?<Competitors demo={demo} brand={activeBrand}/>:section==="reports"?<Reports demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:<SettingsPage demo={demo} brand={activeBrand} ctx={ctx}/>}</div>
   </section>
  </main>
 }
@@ -449,7 +449,108 @@ function Competitors({demo,brand}:{demo:boolean;brand?:Brand}){
  </>;
 }
 
-function Reports(){return <><div className="page-title"><div><span className="overline">REPORTS</span><h1>Visibility reports</h1><p>Share clear progress with your team and clients.</p></div><button className="scan-btn"><Plus/>Create report</button></div><div className="report-grid">{["June 2026 visibility report","Q2 executive summary","Competitor benchmark — June"].map((r,i)=><article className="panel report-card" key={r}><span className="report-icon"><FileText/></span><div><small>{i===0?"MONTHLY":"CUSTOM"}</small><h3>{r}</h3><p>Generated {i*7+2} days ago · PDF</p></div><button><MoreHorizontal/></button><div className="report-score"><span>Visibility</span><b>{67-i*4}%</b></div><button className="button outline">Open report</button></article>)}</div></>}
+type ReportDetail={run:{id:string;completedAt:string|null;confidence:number|null;score:number;mentions:number;total:number};brand:{name:string;domain:string};answers:{id:string;engine:string;brand_mentioned:boolean;position:number|null;sentiment:string;prompt:string}[];fixes:{id:string;category:string;title:string;rationale:string|null;impact_low:number|null;impact_high:number|null;status:string}[]};
+function groupByEngineRaw(answers:{engine:string;brand_mentioned:boolean}[]){const byKey=new Map<string,{mentioned:number;total:number}>();for(const a of answers){const e=byKey.get(a.engine)||{mentioned:0,total:0};e.total++;if(a.brand_mentioned)e.mentioned++;byKey.set(a.engine,e)}return Array.from(byKey.entries()).map(([key,{mentioned,total}])=>{const meta=engineByKey[key]||{name:key,short:key[0]?.toUpperCase()||"?",color:"green"};const pct=total?Math.round(mentioned/total*100):0;return{key,name:meta.name,short:meta.short,color:meta.color,pct}})}
+function Reports({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:number}){
+ const history=useScanHistory(demo,brand,refreshKey);
+ const [viewRunId,setViewRunId]=useState<string|null>(null);
+ const [report,setReport]=useState<ReportDetail|null>(null);
+ const [reportLoading,setReportLoading]=useState(false);
+ async function openReport(runId:string){setViewRunId(runId);setReportLoading(true);const r=await fetch(`/api/reports/${runId}`);const j=await r.json().catch(()=>({}));setReport(j.run?j:null);setReportLoading(false)}
+ function closeReport(){setViewRunId(null);setReport(null)}
+ const header=<div className="page-title"><div><span className="overline">REPORTS</span><h1>Visibility reports</h1><p>Every scan auto-generates a full report. Click any entry to view or export.</p></div></div>;
+ if(demo)return <>{header}<div className="report-grid">{["June 2026","Q2 summary","May 2026"].map((r,i)=><article className="panel report-card" key={r}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"12px"}}><span style={{fontSize:"10px",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",color:"var(--muted)"}}>SCAN #{3-i}</span><span style={{fontSize:"10px",fontWeight:700,padding:"3px 8px",borderRadius:"99px",background:"var(--sky-d)",color:"var(--sky)"}}>Demo</span></div><div style={{display:"flex",alignItems:"flex-end",gap:"14px",marginBottom:"16px"}}><span style={{fontSize:"52px",fontWeight:800,lineHeight:1,fontFamily:"Outfit,system-ui",color:"var(--em)",letterSpacing:"-2px"}}>{67-i*4}</span><div style={{paddingBottom:"5px"}}><div style={{fontSize:"11px",color:"var(--muted)",marginBottom:"2px"}}>AI Visibility Score</div><div style={{fontSize:"12px",fontWeight:600,color:"var(--ink)"}}>{14-i*2}/25 mentions</div></div></div><button className="button" style={{fontSize:"12px",padding:"7px 14px"}}>View report <ArrowUpRight style={{width:"13px"}}/></button></article>)}</div></>;
+ if(!brand)return <>{header}<p style={{color:"var(--muted)",fontSize:"13px"}}>Add a client brand to start generating reports.</p></>;
+ if(history.length===0)return <>{header}<div className="panel" style={{padding:"40px 32px",textAlign:"center"}}><FileText style={{width:"32px",color:"var(--faint)",marginBottom:"12px"}}/><p style={{margin:"0 0 8px",fontWeight:600,color:"var(--ink)"}}>No reports yet for {brand.name}</p><p style={{margin:0,fontSize:"13px",color:"var(--muted)"}}>Click <b>Run scan</b> above to generate your first AI visibility report.</p></div></>;
+ const reversed=[...history].reverse();
+ return <>{header}
+  <div className="report-grid">
+   {reversed.map((h,ri)=>{const origIndex=history.length-1-ri;const isFirst=origIndex===0;const prev=origIndex>0?history[origIndex-1]:null;const delta=prev!=null?h.score-prev.score:null;const dateStr=h.completedAt?new Date(h.completedAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):"Unknown date";const scoreColor=h.score>=70?"var(--em)":h.score>=45?"var(--am)":"var(--cr)";
+   return <article className="panel report-card" key={h.runId} onClick={()=>openReport(h.runId)}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"14px"}}>
+     <div><span style={{fontSize:"10px",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",color:"var(--muted)"}}>SCAN #{history.length-ri}</span><p style={{margin:"3px 0 0",fontSize:"12px",color:"var(--muted)"}}>{dateStr}</p></div>
+     {isFirst?<span style={{fontSize:"10px",fontWeight:700,padding:"3px 8px",borderRadius:"99px",background:"var(--am-d,#FEF3C7)",color:"var(--am)"}}>Baseline</span>:delta!=null?<span style={{fontSize:"12px",fontWeight:700,color:delta>=0?"var(--em)":"var(--cr)"}}>{delta>0?"+":""}{delta} pts</span>:null}
+    </div>
+    <div style={{display:"flex",alignItems:"flex-end",gap:"14px",marginBottom:"14px"}}>
+     <span style={{fontSize:"56px",fontWeight:800,lineHeight:1,fontFamily:"Outfit,system-ui",color:scoreColor,letterSpacing:"-2px"}}>{h.score}</span>
+     <div style={{paddingBottom:"5px"}}><div style={{fontSize:"11px",color:"var(--muted)",marginBottom:"2px"}}>AI Visibility Score</div><div style={{fontSize:"12px",fontWeight:600,color:"var(--ink)"}}>{h.mentions}/{h.total} mentions</div></div>
+    </div>
+    {isFirst&&<p style={{margin:"0 0 14px",fontSize:"11px",color:"var(--muted)",lineHeight:1.5}}>Baseline scan — run your next scan to start tracking progress.</p>}
+    <button className="button" style={{fontSize:"12px",padding:"7px 14px",marginTop:"auto"}} onClick={e=>{e.stopPropagation();openReport(h.runId)}}>View report <ArrowUpRight style={{width:"13px"}}/></button>
+   </article>})}
+  </div>
+  {viewRunId&&<ReportViewer runId={viewRunId} report={report} loading={reportLoading} history={history} onClose={closeReport}/>}
+ </>;
+}
+function ReportViewer({runId,report,loading,history,onClose}:{runId:string;report:ReportDetail|null;loading:boolean;history:ScanHistoryEntry[];onClose:()=>void}){
+ function printReport(){window.print()}
+ const histIdx=report?history.findIndex(h=>h.runId===runId):-1;
+ const isBaseline=histIdx===0;
+ const prev=histIdx>0?history[histIdx-1]:null;
+ const delta=prev!=null&&report?report.run.score-prev.score:null;
+ const dateStr=report?.run.completedAt?new Date(report.run.completedAt).toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"}):"";
+ const engineBreakdown=report?groupByEngineRaw(report.answers):[];
+ return <div className="rv-overlay" onClick={onClose}>
+  <div className="rv-panel" onClick={e=>e.stopPropagation()}>
+   <div className="rv-actions no-print">
+    <span style={{fontSize:"12px",fontWeight:700,color:"var(--ink)"}}>Scan Report{report?` — ${report.brand.name}`:""}</span>
+    <div style={{display:"flex",gap:"8px"}}><button className="button" onClick={printReport} style={{fontSize:"12px",padding:"7px 14px"}}><FileText style={{width:"13px"}}/>Export PDF</button><button className="icon-btn" onClick={onClose}><X/></button></div>
+   </div>
+   {loading&&<div style={{padding:"80px",textAlign:"center"}}><LoaderCircle className="spin" style={{width:"32px",color:"var(--sky)"}}/></div>}
+   {!loading&&!report&&<div style={{padding:"48px",textAlign:"center",color:"var(--muted)"}}><AlertCircle style={{width:"32px",marginBottom:"12px"}}/><p>Couldn&apos;t load this report.</p></div>}
+   {!loading&&report&&<>
+    <div className="rv-header">
+     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"28px"}}>
+      <span style={{fontSize:"16px",fontWeight:700,color:"#E2E8F0",letterSpacing:"-.3px"}}>a<span style={{color:"#0EA5E9"}}>askvisibleai</span></span>
+      <div style={{textAlign:"right"}}><div style={{fontSize:"10px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"#475569",marginBottom:"2px"}}>AI VISIBILITY REPORT</div><div style={{fontSize:"12px",color:"#94A3B8"}}>{dateStr}</div></div>
+     </div>
+     <div style={{display:"flex",alignItems:"flex-start",gap:"32px",flexWrap:"wrap"}}>
+      <div>
+       {isBaseline&&<span style={{display:"inline-block",marginBottom:"10px",fontSize:"11px",fontWeight:700,padding:"4px 10px",borderRadius:"99px",background:"rgba(245,158,11,.18)",color:"#F59E0B",letterSpacing:".5px"}}>BASELINE SCAN</span>}
+       {!isBaseline&&delta!=null&&<span style={{display:"block",marginBottom:"10px",fontSize:"14px",fontWeight:700,color:delta>=0?"#10B981":"#EF4444"}}>{delta>0?"↑":"↓"}{Math.abs(delta)} pts vs previous scan</span>}
+       <div style={{fontSize:"10px",fontWeight:700,letterSpacing:"1.5px",textTransform:"uppercase",color:"#475569",marginBottom:"4px"}}>AI VISIBILITY SCORE</div>
+       <div style={{fontSize:"96px",fontWeight:800,lineHeight:1,fontFamily:"Outfit,system-ui",color:"#0EA5E9",letterSpacing:"-5px"}}>{report.run.score}</div>
+       <div style={{marginTop:"14px",display:"flex",gap:"8px",flexWrap:"wrap"}}>
+        <span style={{fontSize:"12px",color:"#94A3B8",padding:"4px 10px",borderRadius:"5px",background:"rgba(255,255,255,.07)"}}>{report.run.mentions}/{report.run.total} mentions</span>
+        {report.run.confidence!=null&&<span style={{fontSize:"12px",color:"#94A3B8",padding:"4px 10px",borderRadius:"5px",background:"rgba(255,255,255,.07)"}}>{confidenceLabel(report.run.confidence)}</span>}
+       </div>
+      </div>
+      <div style={{marginLeft:"auto",textAlign:"right",paddingTop:"4px"}}>
+       <div style={{fontSize:"22px",fontWeight:700,fontFamily:"Outfit,system-ui",color:"#E2E8F0",marginBottom:"4px"}}>{report.brand.name}</div>
+       <div style={{fontSize:"13px",color:"#64748B"}}>{report.brand.domain}</div>
+       {isBaseline&&<div style={{marginTop:"16px",maxWidth:"240px",fontSize:"12px",color:"#475569",lineHeight:1.6}}>First AI health check for {report.brand.name}. Run your next scan to start tracking trends.</div>}
+      </div>
+     </div>
+    </div>
+    <div className="rv-section">
+     <div className="rv-section-title">Visibility by engine</div>
+     <div style={{display:"grid",gap:"10px"}}>
+      {engineBreakdown.map(e=><div key={e.key} style={{display:"flex",alignItems:"center",gap:"12px"}}>
+       <span className={`engine-logo ${e.color}`} style={{flexShrink:0}}>{e.short}</span>
+       <div style={{flex:1}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:"4px"}}><span style={{fontSize:"13px",fontWeight:600,color:"var(--ink)"}}>{e.name}</span><span style={{fontSize:"13px",fontWeight:700,color:"var(--sky)",fontVariantNumeric:"tabular-nums"}}>{e.pct}%</span></div><div style={{height:"6px",background:"var(--line)",borderRadius:"3px"}}><div style={{height:"100%",width:e.pct+"%",background:"var(--sky)",borderRadius:"3px"}}/></div></div>
+      </div>)}
+     </div>
+    </div>
+    <div className="rv-section">
+     <div className="rv-section-title">Prompt results ({report.answers.length})</div>
+     <div className="table-wrap"><table><thead><tr><th>Prompt</th><th>Engine</th><th>Status</th><th>Position</th><th>Sentiment</th></tr></thead><tbody>{report.answers.map(a=><tr key={a.id}><td><b>{a.prompt}</b></td><td>{engineByKey[a.engine]?.name||a.engine}</td><td><span className={a.brand_mentioned?"status yes":"status no"}>{a.brand_mentioned?"Mentioned":"Not mentioned"}</span></td><td>{a.position?`#${a.position}`:"—"}</td><td>{a.sentiment==="not-mentioned"?"—":a.sentiment}</td></tr>)}</tbody></table></div>
+    </div>
+    {report.fixes.length>0&&<div className="rv-section">
+     <div className="rv-section-title">AI-recommended fixes ({report.fixes.length})</div>
+     <div style={{display:"grid",gap:"10px"}}>
+      {report.fixes.slice(0,6).map(f=><div key={f.id} style={{border:"1px solid var(--line)",borderRadius:"8px",padding:"14px 16px"}}>
+       <div style={{display:"flex",gap:"10px",alignItems:"flex-start"}}>
+        <span style={{fontSize:"10px",fontWeight:700,padding:"3px 8px",borderRadius:"4px",background:"var(--sky-d,#E0F2FE)",color:"var(--sky)",flexShrink:0,marginTop:"1px"}}>{f.category.toUpperCase()}</span>
+        <div><div style={{fontWeight:700,fontSize:"13px",color:"var(--ink)",marginBottom:"4px"}}>{f.title}</div>{f.rationale&&<div style={{fontSize:"12px",color:"var(--muted)"}}>{f.rationale}</div>}{f.impact_low!=null&&f.impact_high!=null&&<div style={{marginTop:"6px",fontSize:"11px",color:"var(--em)",fontWeight:600}}>Estimated lift: +{f.impact_low}–{f.impact_high}%</div>}</div>
+       </div>
+      </div>)}
+     </div>
+    </div>}
+    <div className="rv-footer"><span style={{fontWeight:700,color:"var(--muted)"}}>a<span style={{color:"var(--sky)"}}>askvisibleai</span></span><span>Generated {new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</span></div>
+   </>}
+  </div>
+ </div>
+}
 const WEEK_DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 const FREQ_LABEL:{[k:string]:string}={weekly:"Weekly",monthly:"Monthly",off:"Off (manual only)"};
 
