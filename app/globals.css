@@ -401,9 +401,9 @@ td .up,td .down{display:flex;align-items:center}td svg{width:12px}
 .share-bars i b{display:block;background:var(--sky);height:100%;border-radius:9px}
 
 /* Overview & Fixes sub-tabs */
-.overview-tabs{display:flex;gap:4px;margin-bottom:14px;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:4px}
-.overview-tabs button{flex:none;border:0;background:transparent;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;font-family:inherit;color:var(--muted);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:5px;white-space:nowrap}
-.overview-tabs button.active{background:var(--sky-d,#E0F2FE);color:var(--sky);font-weight:700}
+.overview-tabs{display:flex;gap:3px;margin-bottom:16px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:4px}
+.overview-tabs button{flex:none;border:0;background:transparent;border-radius:8px;padding:11px 22px;font-size:14px;font-weight:600;font-family:inherit;color:var(--muted);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.overview-tabs button.active{background:#1E3A5F;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(30,58,95,.35)}
 .overview-tabs button:hover:not(.active){color:var(--ink);background:var(--bg)}
 
 /* Reports — scan history cards */
