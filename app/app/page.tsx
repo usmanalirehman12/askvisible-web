@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Activity, AlertCircle, ArrowDownRight, ArrowLeft, ArrowUpRight, BarChart3, Bell, Check, ChevronDown, CircleHelp, Edit2, FileText, Gauge, LayoutDashboard, LoaderCircle, LogOut, Menu, Moon, MoreHorizontal, Play, Plus, Radar, Search, Settings, Sparkles, Sun, Target, Trash2, TrendingUp, Users, WandSparkles, X } from "lucide-react";
+import { Activity, AlertCircle, ArrowDownRight, ArrowLeft, ArrowUpRight, BarChart3, Bell, Check, ChevronDown, CircleHelp, Edit2, FileText, Gauge, Globe, LayoutDashboard, LoaderCircle, LogOut, Menu, Moon, MoreHorizontal, Play, Plus, Radar, Search, Settings, Sparkles, Sun, Target, Trash2, TrendingUp, Users, WandSparkles, X } from "lucide-react";
 import { supabaseConfigured } from "@/lib/supabase/config";
 import type { Brand, Competitor, Fix, Prompt, WorkspaceContext } from "@/lib/data/types";
 import type { ScanAnswerRow } from "@/lib/data/stats";
@@ -206,6 +206,7 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
  const {scan:latest,loading}=useLatestScan(demo,brand,refreshKey);
  const fixes=useFixes(demo,brand,refreshKey);
  const history=useScanHistory(demo,brand,refreshKey);
+ const [overviewTab,setOverviewTab]=useState<"summary"|"traffic"|"rankings">("summary");
  const [promptCount,setPromptCount]=useState<number|null>(null);
  useEffect(()=>{
   if(demo||!brand)return;
@@ -214,20 +215,26 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
   return ()=>{cancelled=true};
  },[demo,brand,refreshKey]);
 
- const header=<div className="page-title"><div><span className="overline">OVERVIEW</span><h1>Good morning, {firstName} <span>👋</span></h1><p>Here’s how your brand is showing up in AI answers.</p></div><div className="date-control">Last 30 days <ChevronDown/></div></div>;
+ const header=<div className="page-title"><div><span className="overline">OVERVIEW</span><h1>Good morning, {firstName} <span>👋</span></h1><p>Here&apos;s how your brand is showing up in AI answers.</p></div><div className="date-control">Last 30 days <ChevronDown/></div></div>;
+ const tabBar=<div className="overview-tabs"><button className={overviewTab==="summary"?"active":""} onClick={()=>setOverviewTab("summary")}>Summary</button><button className={overviewTab==="traffic"?"active":""} onClick={()=>setOverviewTab("traffic")}>Traffic &amp; Reach</button><button className={overviewTab==="rankings"?"active":""} onClick={()=>setOverviewTab("rankings")}>Rankings</button></div>;
 
- if(demo)return <>{header}
-  <ScoreHero score={67} trend="8.2%" confidence="High confidence"/>
-  <div className="stats-grid"><Stat label="Total mentions" value="142" trend="12.4%" icon={Activity}/><Stat label="Average position" value="#2.4" sub="when mentioned" icon={Target}/><Stat label="Prompts tracked" value="183" sub="of 250 monthly" icon={Search}/><Stat label="AI engines" value="6" sub="ChatGPT · Gemini · Perplexity · Claude · DeepSeek · AI Overviews" icon={BarChart3}/></div>
-  <div className="dashboard-grid"><article className="panel visibility-panel"><PanelHead title="Visibility trend" sub="Your share of AI answers over time"/><div className="chart-legend"><span><i/>Your brand</span><span><i/>Top competitor</span></div><div className="big-chart"><div className="axis"><span>80%</span><span>60%</span><span>40%</span><span>20%</span><span>0%</span></div><svg viewBox="0 0 800 260" preserveAspectRatio="none"><defs><linearGradient id="appfill"><stop offset="0" stopColor="#0EA5E9" stopOpacity=".22"/><stop offset="1" stopColor="#0EA5E9" stopOpacity="0"/></linearGradient></defs><path className="grid-lines" d="M0 10H800M0 70H800M0 130H800M0 190H800M0 250H800"/><path className="competitor-line" d="M0 158 C90 144 110 118 190 125 S300 98 380 112 S510 75 590 92 S700 65 800 68"/><path className="trend-area" d="M0 205 C80 195 110 185 170 188 S260 143 330 153 S440 115 510 125 S625 80 690 92 S760 50 800 43 L800 260L0 260Z"/><path className="trend-line" d="M0 205 C80 195 110 185 170 188 S260 143 330 153 S440 115 510 125 S625 80 690 92 S760 50 800 43"/><circle cx="800" cy="43" r="5"/></svg><div className="x-axis"><span>Jun 19</span><span>Jun 25</span><span>Jul 1</span><span>Jul 7</span><span>Jul 13</span><span>Jul 19</span></div></div></article>
-  <article className="panel engine-panel"><PanelHead title="Visibility by engine" sub="Last 30 days"/>{demoEngines.map(e=><div className="engine-row" key={e.name}><span className={`engine-logo ${e.color}`}>{e.short}</span><div><b>{e.name}</b><i><span style={{width:e.score+"%"}}/></i></div><strong>{e.score}%</strong></div>)}<button className="panel-link" onClick={()=>setSection("prompts")}>View prompt details <ArrowUpRight/></button></article>
-  <article className="panel prompt-panel"><PanelHead title="Recent prompt performance" sub="Latest results across all engines" action={<button onClick={()=>setSection("prompts")}>View all <ArrowUpRight/></button>}/><DemoPromptTable short/></article>
-  <article className="panel opportunities"><PanelHead title="Top opportunities" sub="AI-recommended actions ranked by impact" action={<button onClick={()=>setSection("fixes")}>View all</button>}/>{[{t:"Add direct comparison content",p:"Your competitors win 14 prompts with comparison pages.",impact:"High",lift:"+12–18%"},{t:"Strengthen third-party citations",p:"AI engines cite 3 sources that don’t mention your brand.",impact:"High",lift:"+8–14%"},{t:"Add SoftwareApplication schema",p:"Help engines understand your product entity and pricing.",impact:"Med",lift:"+4–7%"}].map((o,i)=><div className="opportunity" key={o.t}><span className="opp-icon"><Sparkles/></span><div><b>{o.t}</b><p>{o.p}</p><small><em className={o.impact==="High"?"high":"medium"}>{o.impact} impact</em>Estimated lift <strong>{o.lift}</strong></small></div><button onClick={()=>setSection("fixes")}>Fix this <ArrowUpRight/></button></div>)}</article>
-  </div></>;
+ if(demo)return <>{header}{tabBar}
+  {overviewTab==="summary"&&<>
+   <ScoreHero score={67} trend="8.2%" confidence="Full scan"/>
+   <div className="stats-grid"><Stat label="Total mentions" value="142" trend="12.4%" icon={Activity}/><Stat label="Average position" value="#2.4" sub="when mentioned" icon={Target}/><Stat label="Prompts tracked" value="183" sub="of 250 monthly" icon={Search}/><Stat label="AI engines" value="6" sub="ChatGPT · Gemini · Perplexity · Claude · DeepSeek · AI Overviews" icon={BarChart3}/></div>
+   <div className="dashboard-grid"><article className="panel visibility-panel"><PanelHead title="Visibility trend" sub="Your share of AI answers over time"/><div className="chart-legend"><span><i/>Your brand</span><span><i/>Top competitor</span></div><div className="big-chart"><div className="axis"><span>80%</span><span>60%</span><span>40%</span><span>20%</span><span>0%</span></div><svg viewBox="0 0 800 260" preserveAspectRatio="none"><defs><linearGradient id="appfill"><stop offset="0" stopColor="#0EA5E9" stopOpacity=".22"/><stop offset="1" stopColor="#0EA5E9" stopOpacity="0"/></linearGradient></defs><path className="grid-lines" d="M0 10H800M0 70H800M0 130H800M0 190H800M0 250H800"/><path className="competitor-line" d="M0 158 C90 144 110 118 190 125 S300 98 380 112 S510 75 590 92 S700 65 800 68"/><path className="trend-area" d="M0 205 C80 195 110 185 170 188 S260 143 330 153 S440 115 510 125 S625 80 690 92 S760 50 800 43 L800 260L0 260Z"/><path className="trend-line" d="M0 205 C80 195 110 185 170 188 S260 143 330 153 S440 115 510 125 S625 80 690 92 S760 50 800 43"/><circle cx="800" cy="43" r="5"/></svg><div className="x-axis"><span>Jun 19</span><span>Jun 25</span><span>Jul 1</span><span>Jul 7</span><span>Jul 13</span><span>Jul 19</span></div></div></article>
+   <article className="panel engine-panel"><PanelHead title="Visibility by engine" sub="Last 30 days"/>{demoEngines.map(e=><div className="engine-row" key={e.name}><span className={`engine-logo ${e.color}`}>{e.short}</span><div><b>{e.name}</b><i><span style={{width:e.score+"%"}}/></i></div><strong>{e.score}%</strong></div>)}<button className="panel-link" onClick={()=>setSection("prompts")}>View prompt details <ArrowUpRight/></button></article>
+   <article className="panel prompt-panel"><PanelHead title="Recent prompt performance" sub="Latest results across all engines" action={<button onClick={()=>setSection("prompts")}>View all <ArrowUpRight/></button>}/><DemoPromptTable short/></article>
+   <article className="panel opportunities"><PanelHead title="Top opportunities" sub="AI-recommended actions ranked by impact" action={<button onClick={()=>setSection("fixes")}>View all</button>}/>{[{t:"Add direct comparison content",p:"Your competitors win 14 prompts with comparison pages.",impact:"High",lift:"+12–18%"},{t:"Strengthen third-party citations",p:"AI engines cite 3 sources that don't mention your brand.",impact:"High",lift:"+8–14%"},{t:"Add SoftwareApplication schema",p:"Help engines understand your product entity and pricing.",impact:"Med",lift:"+4–7%"}].map(o=><div className="opportunity" key={o.t}><span className="opp-icon"><Sparkles/></span><div><b>{o.t}</b><p>{o.p}</p><small><em className={o.impact==="High"?"high":"medium"}>{o.impact} impact</em>Estimated lift <strong>{o.lift}</strong></small></div><button onClick={()=>setSection("fixes")}>Fix this <ArrowUpRight/></button></div>)}</article>
+   </div>
+  </>}
+  {overviewTab==="traffic"&&<TrafficInsights demo answers={[]} history={[]}/>}
+  {overviewTab==="rankings"&&<RankingsDetail demo answers={[]}/>}
+ </>;
 
- if(!brand)return <>{header}<p>Add a client to start tracking AI visibility.</p></>;
- if(loading)return <>{header}<p>Loading…</p></>;
- if(!latest)return <>{header}<div className="panel" style={{padding:"24px"}}><p>No scans yet for {brand.name}. Click <b>Run scan</b> above to check its AI visibility for the first time.</p></div></>;
+ if(!brand)return <>{header}{tabBar}<p>Add a client to start tracking AI visibility.</p></>;
+ if(loading)return <>{header}{tabBar}<p>Loading…</p></>;
+ if(!latest)return <>{header}{tabBar}<div className="panel" style={{padding:"24px"}}><p>No scans yet for {brand.name}. Click <b>Run scan</b> above to check its AI visibility for the first time.</p></div></>;
 
  const summary=summarizeScan(latest);
  const byEngine=groupByEngine(latest.answers);
@@ -235,36 +242,134 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
  const delta=prevScan!=null?summary.score-prevScan.score:null;
  const sparkData=history.map(h=>({score:h.score,date:h.completedAt||""}));
 
- return <>{header}
-  <ScoreHero score={summary.score} confidence={confidenceLabel(latest.confidence??0)} delta={delta} sparkData={sparkData}/>
-  <div className="stats-grid">
-   <Stat label="Total mentions" value={String(summary.mentions)} sub={`of ${summary.total} answers checked`} icon={Activity}/>
-   <Stat label="Average position" value={summary.avgPosition!=null?`#${summary.avgPosition}`:"—"} sub="when mentioned" icon={Target}/>
-   <Stat label="Scans run" value={String(history.length||1)} sub={history.length>1?`first scan ${new Date(history[0]?.completedAt||"").toLocaleDateString()}`:"baseline scan"} icon={Search}/>
-   <Stat label="AI engines" value="6" sub="ChatGPT · Gemini · Perplexity · Claude · DeepSeek · AI Overviews" icon={BarChart3}/>
-  </div>
-  <div className="dashboard-grid">
-   <article className="panel engine-panel"><PanelHead title="Visibility by engine" sub="Most recent scan"/>{byEngine.map(e=><div className="engine-row" key={e.key}><span className={`engine-logo ${e.color}`}>{e.short}</span><div><b>{e.name}</b><i><span style={{width:e.pct+"%"}}/></i></div><strong>{e.pct}%</strong></div>)}<button className="panel-link" onClick={()=>setSection("prompts")}>View prompt details <ArrowUpRight/></button></article>
-   <article className="panel prompt-panel"><PanelHead title="Recent prompt performance" sub="Latest results across all engines" action={<button onClick={()=>setSection("prompts")}>View all <ArrowUpRight/></button>}/><RealPromptTable answers={latest.answers.slice(0,4)}/></article>
-  </div>
-  {fixes.length>0&&<article className="panel opportunities" style={{marginTop:"14px"}}><PanelHead title="Top AI-generated fixes" sub="Claude's recommendations from your most recent scan" action={<button onClick={()=>setSection("fixes")}>View all <ArrowUpRight/></button>}/>{fixes.slice(0,3).map(f=><div className="opportunity" key={f.id}><span className="opp-icon"><Sparkles/></span><div><b>{f.title}</b><p>{f.rationale}</p><small><em className={(f.impact_high||0)>=12?"high":"medium"}>{(f.impact_high||0)>=12?"High":"Med"} impact</em>Estimated lift <strong>+{f.impact_low}–{f.impact_high}%</strong></small></div><button onClick={()=>setSection("fixes")}>View fix <ArrowUpRight/></button></div>)}</article>}
+ return <>{header}{tabBar}
+  {overviewTab==="summary"&&<>
+   <ScoreHero score={summary.score} confidence={coverageLabel(latest.confidence??0)} delta={delta} sparkData={sparkData}/>
+   <div className="stats-grid">
+    <Stat label="Total mentions" value={String(summary.mentions)} sub={`of ${summary.total} answers checked`} icon={Activity}/>
+    <Stat label="Average position" value={summary.avgPosition!=null?`#${summary.avgPosition}`:"—"} sub="when mentioned" icon={Target}/>
+    <Stat label="Scans run" value={String(history.length||1)} sub={history.length>1?`first scan ${new Date(history[0]?.completedAt||"").toLocaleDateString()}`:"baseline scan"} icon={Search}/>
+    <Stat label="AI engines" value="6" sub="ChatGPT · Gemini · Perplexity · Claude · DeepSeek · AI Overviews" icon={BarChart3}/>
+   </div>
+   <div className="dashboard-grid">
+    <article className="panel engine-panel"><PanelHead title="Visibility by engine" sub="Most recent scan"/>{byEngine.map(e=><div className="engine-row" key={e.key}><span className={`engine-logo ${e.color}`}>{e.short}</span><div><b>{e.name}</b><i><span style={{width:e.pct+"%"}}/></i></div><strong>{e.pct}%</strong></div>)}<button className="panel-link" onClick={()=>setSection("prompts")}>View prompt details <ArrowUpRight/></button></article>
+    <article className="panel prompt-panel"><PanelHead title="Recent prompt performance" sub="Latest results across all engines" action={<button onClick={()=>setSection("prompts")}>View all <ArrowUpRight/></button>}/><RealPromptTable answers={latest.answers.slice(0,4)}/></article>
+   </div>
+   {fixes.length>0&&<article className="panel opportunities" style={{marginTop:"14px"}}><PanelHead title="Top AI-generated fixes" sub="Claude&apos;s recommendations from your most recent scan" action={<button onClick={()=>setSection("fixes")}>View all <ArrowUpRight/></button>}/>{fixes.slice(0,3).map(f=><div className="opportunity" key={f.id}><span className="opp-icon"><Sparkles/></span><div><b>{f.title}</b><p>{f.rationale}</p><small><em className={(f.impact_high||0)>=12?"high":"medium"}>{(f.impact_high||0)>=12?"High":"Med"} impact</em>Estimated lift <strong>+{f.impact_low}–{f.impact_high}%</strong></small></div><button onClick={()=>setSection("fixes")}>View fix <ArrowUpRight/></button></div>)}</article>}
+  </>}
+  {overviewTab==="traffic"&&<TrafficInsights demo={false} answers={latest.answers} history={history}/>}
+  {overviewTab==="rankings"&&<RankingsDetail demo={false} answers={latest.answers}/>}
  </>;
 }
 
-function confidenceLabel(value:number){return value>=70?"High confidence":value>=40?"Medium confidence":"Low confidence"}
+function scoreRating(s:number){if(s>=70)return{label:"Strong",color:"var(--em,#10B981)"};if(s>=50)return{label:"Good",color:"var(--sky,#0EA5E9)"};if(s>=30)return{label:"Fair",color:"var(--am,#F59E0B)"};if(s>=10)return{label:"Weak",color:"#F97316"};return{label:"Critical",color:"var(--cr,#EF4444)"}}
+function coverageLabel(value:number){return value>=70?"Full scan":value>=40?"Partial scan":"Limited data"}
 function groupByEngine(answers:ScanAnswerRow[]){
  const byKey=new Map<string,ScanAnswerRow[]>();
  for(const a of answers){const list=byKey.get(a.engine)??[];list.push(a);byKey.set(a.engine,list)}
  return Array.from(byKey.entries()).map(([key,list])=>{const meta=engineByKey[key]||{name:key,short:key[0]?.toUpperCase()||"?",color:"green"};const pct=list.length?Math.round(list.filter(a=>a.brand_mentioned).length/list.length*100):0;return {key,name:meta.name,short:meta.short,color:meta.color,pct}});
 }
 
+const ENG_REACH:Record<string,number>={openai:2_800_000_000,gemini:450_000_000,perplexity:120_000_000,anthropic:60_000_000,deepseek:250_000_000,ai_overviews:900_000_000};
+const ENG_KEY_MAP:Record<string,string>={ChatGPT:"openai",Gemini:"gemini",Perplexity:"perplexity",Claude:"anthropic",DeepSeek:"deepseek","AI Overviews":"ai_overviews"};
+function fmtNum(n:number){if(n>=1_000_000)return(n/1_000_000).toFixed(1)+"M";if(n>=1_000)return(n/1_000).toFixed(0)+"K";return n.toString()}
+
+function TrafficInsights({demo,answers,history}:{demo:boolean;answers:ScanAnswerRow[];history:ScanHistoryEntry[]}){
+ const rows=(demo?demoEngines.map(e=>({key:ENG_KEY_MAP[e.name]||e.name,name:e.name,short:e.short,color:e.color,pct:e.score})):groupByEngine(answers))
+  .map(e=>({...e,reach:ENG_REACH[e.key]||0,est:Math.round((ENG_REACH[e.key]||0)*(e.pct/100)*0.0015)}));
+ const total=rows.reduce((s,r)=>s+r.est,0);
+ const sparkData=demo?[{score:51,date:""},{score:58,date:""},{score:62,date:""},{score:67,date:""}]:history.map(h=>({score:h.score,date:h.completedAt||""}));
+ return <div>
+  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px",marginBottom:"14px"}}>
+   <article className="panel" style={{padding:"20px 24px",borderLeft:"4px solid var(--sky)"}}>
+    <div style={{fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--muted)",marginBottom:"4px"}}>Est. Monthly AI Impressions</div>
+    <div style={{fontSize:"48px",fontWeight:800,fontFamily:"Outfit,system-ui",color:"var(--sky)",letterSpacing:"-2px",lineHeight:1}}>{fmtNum(total)}</div>
+    <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"6px"}}>Brand impressions across all AI engines · directional estimate</div>
+   </article>
+   <article className="panel" style={{padding:"20px 24px"}}>
+    <div style={{fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--muted)",marginBottom:"8px"}}>Score trend</div>
+    {sparkData.length>=2?<Sparkline data={sparkData}/>:<p style={{fontSize:"12px",color:"var(--muted)"}}>Run more scans to see trend</p>}
+    {sparkData.length>=2&&<div style={{fontSize:"11px",color:"var(--muted)",marginTop:"6px"}}>{sparkData.length} scan{sparkData.length!==1?"s":""} tracked</div>}
+   </article>
+  </div>
+  <article className="panel" style={{marginBottom:"14px"}}>
+   <div className="panel-head"><div><h3>Engine reach breakdown</h3><p>Estimated monthly brand impressions per AI engine, based on mention rate × engine reach</p></div></div>
+   <div className="table-wrap"><table><thead><tr><th>Engine</th><th>Mention rate</th><th>Est. engine queries/mo</th><th>Est. brand impressions</th><th>Tier</th></tr></thead>
+   <tbody>{rows.map(r=>{const tier=r.pct>=60?"Top":r.pct>=30?"Good":r.pct>=10?"Low":"Minimal";const tc=r.pct>=60?"var(--em)":r.pct>=30?"var(--sky)":r.pct>=10?"var(--am)":"var(--cr)";return <tr key={r.key}>
+    <td><div style={{display:"flex",alignItems:"center",gap:"8px"}}><span className={`engine-logo ${r.color}`}>{r.short}</span><b>{r.name}</b></div></td>
+    <td><span style={{fontWeight:700,color:tc}}>{r.pct}%</span></td>
+    <td style={{color:"var(--muted)"}}>{fmtNum(r.reach)}</td>
+    <td style={{fontWeight:600,fontVariantNumeric:"tabular-nums"}}>{fmtNum(r.est)}</td>
+    <td><span style={{fontSize:"10px",fontWeight:700,padding:"2px 7px",borderRadius:"99px",background:`color-mix(in srgb,${tc} 14%,transparent)`,color:tc}}>{tier}</span></td>
+   </tr>})}</tbody></table></div>
+  </article>
+  <p style={{fontSize:"11px",color:"var(--muted)",lineHeight:1.5}}>* Estimates based on publicly reported engine usage (ChatGPT ~2.8B/mo, AI Overviews ~900M, DeepSeek ~250M, Gemini ~450M, Perplexity ~120M, Claude ~60M) × your tracked mention rate × 0.15% topic relevance factor. Actual reach varies by query specificity and region.</p>
+ </div>
+}
+
+function RankingsDetail({demo,answers}:{demo:boolean;answers:ScanAnswerRow[]}){
+ const allAnswers=demo?demoPrompts.map((p,i)=>({id:String(i),engine:ENG_KEY_MAP[p.engine]||p.engine,brand_mentioned:p.status==="Mentioned",position:p.position,sentiment:"positive" as const,prompt_id:String(i),prompts:{query:p.q}})):answers;
+ const mentioned=allAnswers.filter(a=>a.brand_mentioned);
+ const notMentioned=allAnswers.filter(a=>!a.brand_mentioned);
+ const posDist:{[k:number]:number}={};
+ for(const a of mentioned){if(a.position){posDist[a.position]=(posDist[a.position]||0)+1}}
+ const maxPosCnt=Math.max(1,...Object.values(posDist));
+ const bestPos=Object.keys(posDist).length?Math.min(...Object.keys(posDist).map(Number)):null;
+ type PromptBest={query:string;engine:string;position:number};
+ const promptBest=new Map<string,PromptBest>();
+ for(const a of mentioned){if(a.position&&a.prompts){const ex=promptBest.get(a.prompt_id);if(!ex||a.position<ex.position)promptBest.set(a.prompt_id,{query:a.prompts.query,engine:a.engine,position:a.position})}}
+ const topPrompts=[...promptBest.values()].sort((a,b)=>a.position-b.position).slice(0,5);
+ type MissedInfo={query:string;engineCount:number};
+ const missedMap=new Map<string,MissedInfo>();
+ for(const a of notMentioned){if(a.prompts&&!promptBest.has(a.prompt_id)){const ex=missedMap.get(a.prompt_id)||{query:a.prompts.query,engineCount:0};ex.engineCount++;missedMap.set(a.prompt_id,ex)}}
+ const missed=[...missedMap.values()].sort((a,b)=>b.engineCount-a.engineCount).slice(0,5);
+ const byEngineData=groupByEngine(allAnswers).map(e=>{const ea=allAnswers.filter(a=>a.engine===e.key);const em=ea.filter(a=>a.brand_mentioned);const pos=em.map(a=>a.position).filter((p):p is number=>p!=null);const avgPos=pos.length?Math.round(pos.reduce((s,p)=>s+p,0)/pos.length*10)/10:null;const pos_pct=em.length?Math.round(em.filter(a=>a.sentiment==="positive").length/em.length*100):0;return{...e,total:ea.length,avgPos,pos_pct}});
+ return <div>
+  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"12px",marginBottom:"14px"}}>
+   <article className="panel" style={{padding:"16px 20px"}}><div style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",fontWeight:700,letterSpacing:"1px"}}>Mentioned</div><div style={{fontSize:"36px",fontWeight:800,fontFamily:"Outfit",color:"var(--em)",letterSpacing:"-1px",marginTop:"4px"}}>{mentioned.length}</div><div style={{fontSize:"12px",color:"var(--muted)"}}>of {allAnswers.length} answers</div></article>
+   <article className="panel" style={{padding:"16px 20px"}}><div style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",fontWeight:700,letterSpacing:"1px"}}>Best position</div><div style={{fontSize:"36px",fontWeight:800,fontFamily:"Outfit",color:"var(--sky)",letterSpacing:"-1px",marginTop:"4px"}}>{bestPos!=null?`#${bestPos}`:"—"}</div><div style={{fontSize:"12px",color:"var(--muted)"}}>highest rank recorded</div></article>
+   <article className="panel" style={{padding:"16px 20px"}}><div style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",fontWeight:700,letterSpacing:"1px"}}>Missed prompts</div><div style={{fontSize:"36px",fontWeight:800,fontFamily:"Outfit",color:"var(--am)",letterSpacing:"-1px",marginTop:"4px"}}>{missed.length}</div><div style={{fontSize:"12px",color:"var(--muted)"}}>opportunities to win</div></article>
+  </div>
+  {Object.keys(posDist).length>0&&<article className="panel" style={{marginBottom:"14px",padding:"20px"}}>
+   <h3 style={{margin:"0 0 14px",font:"700 13px 'Outfit',system-ui",color:"var(--ink)"}}>Position distribution</h3>
+   <div style={{display:"grid",gap:"8px"}}>{[1,2,3,4,5].map(pos=><div key={pos} style={{display:"grid",gridTemplateColumns:"32px 1fr 32px",alignItems:"center",gap:"10px"}}>
+    <span style={{fontSize:"12px",fontWeight:700,color:"var(--muted)"}}>#{pos}</span>
+    <div style={{height:"10px",background:"var(--line)",borderRadius:"5px",overflow:"hidden"}}><div style={{height:"100%",width:`${((posDist[pos]||0)/maxPosCnt)*100}%`,background:"var(--sky)",borderRadius:"5px"}}/></div>
+    <span style={{fontSize:"12px",fontWeight:700,color:"var(--ink)",textAlign:"right"}}>{posDist[pos]||0}</span>
+   </div>)}</div>
+  </article>}
+  <article className="panel" style={{marginBottom:"14px"}}>
+   <div className="panel-head"><div><h3>Rankings by engine</h3><p>Visibility, average position, and sentiment per AI engine</p></div></div>
+   <div className="table-wrap"><table><thead><tr><th>Engine</th><th>Mention rate</th><th>Avg position</th><th>Positive sentiment</th><th>Answers</th></tr></thead>
+   <tbody>{byEngineData.map(e=><tr key={e.key}><td><div style={{display:"flex",alignItems:"center",gap:"8px"}}><span className={`engine-logo ${e.color}`}>{e.short}</span><b>{e.name}</b></div></td><td><span style={{fontWeight:700,color:e.pct>=50?"var(--em)":e.pct>=25?"var(--sky)":"var(--cr)"}}>{e.pct}%</span></td><td>{e.avgPos!=null?`#${e.avgPos}`:"—"}</td><td>{e.pct>0?`${e.pos_pct}%`:"—"}</td><td style={{color:"var(--muted)"}}>{e.total}</td></tr>)}
+   </tbody></table></div>
+  </article>
+  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px"}}>
+   {topPrompts.length>0&&<article className="panel"><div className="panel-head"><div><h3>Best performing</h3><p>Prompts where you rank highest</p></div></div><div>{topPrompts.map((p,i)=><div key={i} style={{display:"flex",gap:"10px",alignItems:"flex-start",padding:"10px 16px",borderBottom:"1px solid var(--line)"}}><span style={{fontSize:"20px",fontWeight:800,fontFamily:"Outfit",color:"var(--em)",minWidth:"34px",letterSpacing:"-1px"}}>#{p.position}</span><div><div style={{fontSize:"12px",fontWeight:600,color:"var(--ink)",lineHeight:1.4}}>{p.query}</div><div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>{engineByKey[p.engine]?.name||p.engine}</div></div></div>)}</div></article>}
+   {missed.length>0&&<article className="panel"><div className="panel-head"><div><h3>Missed opportunities</h3><p>Prompts where you&apos;re not mentioned</p></div></div><div>{missed.map((p,i)=><div key={i} style={{display:"flex",gap:"10px",alignItems:"flex-start",padding:"10px 16px",borderBottom:"1px solid var(--line)"}}><span style={{fontSize:"16px",fontWeight:700,color:"var(--cr)",minWidth:"34px",paddingTop:"2px"}}>✗</span><div><div style={{fontSize:"12px",fontWeight:600,color:"var(--ink)",lineHeight:1.4}}>{p.query}</div><div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>Missed by {p.engineCount} engine{p.engineCount!==1?"s":""}</div></div></div>)}</div></article>}
+  </div>
+ </div>
+}
+
 function Stat({label,value,trend,sub,confidence,icon:Icon}:{label:string;value:string;trend?:string;sub?:string;confidence?:string;icon:any}){return <article className="stat"><div><span>{label}</span><b>{value}</b>{trend?<small className="up"><ArrowUpRight/>{trend} <em>vs last period</em></small>:<small>{sub}</small>}{confidence&&<span className="confidence-tag">{confidence}</span>}</div><span className="stat-icon"><Icon/></span></article>}
 function ScoreHero({score,trend,confidence,delta,sparkData}:{score:number|string;trend?:string;confidence?:string;delta?:number|null;sparkData?:{score:number;date:string}[]}){
+ const numScore=typeof score==="number"?score:parseInt(String(score))||0;
+ const rating=scoreRating(numScore);
  const showDelta=delta!=null&&delta!==0;
  const deltaColor=delta!=null&&delta>=0?"var(--em,#10B981)":"#ef4444";
  const deltaSign=delta!=null&&delta>0?"+":"";
- return <div style={{background:"var(--surface,#fff)",border:"1px solid var(--line)",borderRadius:"10px",padding:"24px 28px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"32px",borderLeft:"4px solid var(--sky,#0EA5E9)"}}>
-  <div><span style={{display:"block",fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--sky,#0EA5E9)",marginBottom:"4px"}}>AI Visibility Score</span><span style={{display:"block",fontSize:"76px",fontWeight:800,lineHeight:1,fontFamily:"Outfit,system-ui,sans-serif",color:"var(--sky,#0EA5E9)",letterSpacing:"-4px"}}>{score}</span>{confidence&&<span className="confidence-tag" style={{display:"inline-block",marginTop:"10px"}}>{confidence}</span>}</div>
+ return <div style={{background:"var(--surface,#fff)",border:"1px solid var(--line)",borderRadius:"10px",padding:"24px 28px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"32px",borderLeft:`4px solid ${rating.color}`}}>
+  <div>
+   <span style={{display:"block",fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--muted,#64748B)",marginBottom:"4px"}}>AI Visibility Score</span>
+   <div style={{display:"flex",alignItems:"baseline",gap:"14px"}}>
+    <span style={{fontSize:"76px",fontWeight:800,lineHeight:1,fontFamily:"Outfit,system-ui,sans-serif",color:rating.color,letterSpacing:"-4px"}}>{score}</span>
+    <span style={{fontSize:"22px",fontWeight:800,fontFamily:"Outfit,system-ui",color:rating.color,letterSpacing:"-0.5px",opacity:.75}}>{rating.label}</span>
+   </div>
+   <div style={{marginTop:"10px",display:"flex",gap:"6px",flexWrap:"wrap",alignItems:"center"}}>
+    {confidence&&<span className="confidence-tag" style={{display:"inline-block"}}>{confidence}</span>}
+    <span style={{fontSize:"10px",fontWeight:600,padding:"3px 8px",borderRadius:"99px",background:`color-mix(in srgb,${rating.color} 12%,transparent)`,color:rating.color}}>{numScore>=70?"Regularly mentioned in AI answers":numScore>=50?"Solid AI presence, room to grow":numScore>=30?"Appearing occasionally — gaps to close":numScore>=10?"Rarely mentioned — needs optimization":"Not visible in AI answers — urgent"}</span>
+   </div>
+  </div>
   {sparkData&&sparkData.length>=2&&<div style={{marginLeft:"auto",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"8px"}}><Sparkline data={sparkData}/>{showDelta&&<span style={{fontSize:"20px",fontWeight:700,fontFamily:"Outfit,system-ui",color:deltaColor,letterSpacing:"-0.5px"}}>{deltaSign}{delta} pts vs last scan</span>}{sparkData.length>0&&<span style={{fontSize:"11px",color:"var(--muted,#64748B)"}}>{sparkData.length} scan{sparkData.length!==1?"s":""} tracked</span>}</div>}
   {trend&&!sparkData&&<div style={{marginLeft:"auto",textAlign:"right"}}><span style={{display:"block",fontSize:"28px",fontWeight:700,fontFamily:"Outfit,system-ui",color:"var(--em,#10B981)",letterSpacing:"-1px"}}>↑{trend}</span><span style={{fontSize:"12px",color:"var(--muted,#64748B)"}}>vs last period</span></div>}
  </div>;
@@ -357,6 +462,7 @@ function Prompts({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:n
 }
 
 function Fixes({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:number}){
+ const [fixesTab,setFixesTab]=useState<"fixes"|"seo">("fixes");
  const [fixes,setFixes]=useState<Fix[]>([]);
  const [loading,setLoading]=useState(!demo);
  const [updatingId,setUpdatingId]=useState<string|null>(null);
@@ -382,21 +488,104 @@ function Fixes({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:num
   setUpdatingId(null);await loadFixes();
  }
 
- if(demo)return <><div className="page-title"><div><span className="overline">AI FIX GENERATOR</span><h1>Turn gaps into growth</h1><p>Actionable recommendations based on where competitors beat you.</p></div></div><div className="fix-grid">{[{type:"CONTENT",title:"Create an alternatives comparison page",desc:"You’re absent from 8 high-intent prompts where direct competitors have detailed comparison pages.",lift:"12–18%",effort:"~25 min",color:"purple"},{type:"AUTHORITY",title:"Earn mentions from 3 cited sources",desc:"These publications appear in 41% of winning answers but don't currently mention Acme.",lift:"8–14%",effort:"~2 hrs",color:"green"},{type:"TECHNICAL",title:"Add SoftwareApplication schema",desc:"Clarify your product category, pricing, features, and reviews for answer engines.",lift:"4–7%",effort:"~10 min",color:"blue"}].map((f,i)=><article className="fix-card" key={f.title}><div><span className={`fix-type ${f.color}`}>{f.type}</span><em>#{i+1}</em></div><span className="big-fix-icon"><WandSparkles/></span><h3>{f.title}</h3><p>{f.desc}</p><div className="lift"><span>Estimated lift<b>{f.lift}</b></span><span>Time to implement<b>{f.effort}</b></span></div><button className="button">Generate fix <Sparkles/></button></article>)}</div></>;
+ const pageHeader=<div className="page-title"><div><span className="overline">AI FIX GENERATOR</span><h1>Turn gaps into growth</h1><p>{demo?"Actionable recommendations based on where competitors beat you.":brand?`Recommendations for ${brand.name} from your most recent scan.`:"Add a client and run a scan to generate recommendations."}</p></div></div>;
+ const tabBar=<div className="overview-tabs" style={{marginBottom:"14px"}}><button className={fixesTab==="fixes"?"active":""} onClick={()=>setFixesTab("fixes")}><WandSparkles size={14}/>AI Visibility Fixes</button><button className={fixesTab==="seo"?"active":""} onClick={()=>setFixesTab("seo")}><Globe size={14}/>SEO Audit</button></div>;
 
- if(!brand)return <div className="page-title"><div><span className="overline">AI FIX GENERATOR</span><h1>Turn gaps into growth</h1><p>Add a client and run a scan first — fixes are generated by Claude from real scan results.</p></div></div>;
- if(loading)return <div className="page-title"><div><span className="overline">AI FIX GENERATOR</span><h1>Turn gaps into growth</h1></div></div>;
- if(!fixes.length)return <><div className="page-title"><div><span className="overline">AI FIX GENERATOR</span><h1>Turn gaps into growth</h1><p>No fixes yet for {brand.name}. Click <b>Run scan</b> — Claude generates fix suggestions automatically from the results.</p></div></div></>;
+ if(fixesTab==="seo") return <>{pageHeader}{tabBar}<SeoAuditTab demo={demo} domain={demo?"acme.co":(brand?.domain||"")}/></>;
+
+ if(demo)return <>{pageHeader}{tabBar}<div className="fix-grid">{[{type:"CONTENT",title:"Create an alternatives comparison page",desc:"You're absent from 8 high-intent prompts where direct competitors have detailed comparison pages.",lift:"12–18%",effort:"~25 min",color:"purple"},{type:"AUTHORITY",title:"Earn mentions from 3 cited sources",desc:"These publications appear in 41% of winning answers but don't currently mention Acme.",lift:"8–14%",effort:"~2 hrs",color:"green"},{type:"TECHNICAL",title:"Add SoftwareApplication schema",desc:"Clarify your product category, pricing, features, and reviews for answer engines.",lift:"4–7%",effort:"~10 min",color:"blue"}].map((f,i)=><article className="fix-card" key={f.title}><div><span className={`fix-type ${f.color}`}>{f.type}</span><em>#{i+1}</em></div><span className="big-fix-icon"><WandSparkles/></span><h3>{f.title}</h3><p>{f.desc}</p><div className="lift"><span>Estimated lift<b>{f.lift}</b></span><span>Time to implement<b>{f.effort}</b></span></div><button className="button">Generate fix <Sparkles/></button></article>)}</div></>;
+
+ if(!brand)return <>{pageHeader}{tabBar}<p style={{color:"var(--muted)",fontSize:"13px"}}>Add a client first to generate AI fixes.</p></>;
+ if(loading)return <>{pageHeader}{tabBar}</>;
+ if(!fixes.length)return <>{pageHeader}{tabBar}<div className="panel" style={{padding:"32px",textAlign:"center"}}><WandSparkles style={{width:"32px",color:"var(--faint)",marginBottom:"12px"}}/><p style={{margin:"0 0 6px",fontWeight:600}}>No fixes yet for {brand.name}</p><p style={{margin:0,fontSize:"13px",color:"var(--muted)"}}>Click <b>Run scan</b> — Claude generates fix suggestions automatically from the results.</p></div></>;
 
  const colorFor=(category:string)=>({schema:"blue",content:"purple",authority:"green",reviews:"orange",gbp:"orange"} as Record<string,string>)[category]||"purple";
-
  const statusColor:Record<string,string>={pending:"var(--muted,#64748B)",implementing:"var(--sky,#0EA5E9)",done:"var(--em,#10B981)"};
  const statusLabel:Record<string,string>={pending:"Pending",implementing:"Implementing",done:"Done ✓"};
 
- return <><div className="page-title"><div><span className="overline">AI FIX GENERATOR</span><h1>Turn gaps into growth</h1><p>Claude-generated recommendations for {brand.name}, based on your most recent scan.</p></div></div>
+ return <>{pageHeader}{tabBar}
   <div className="fix-grid">{fixes.map((f,i)=>{const busy=updatingId===f.id;const st=f.status||"pending";return <article className="fix-card" key={f.id}><div><span className={`fix-type ${colorFor(f.category)}`}>{f.category.toUpperCase()}</span><em>#{i+1}</em></div><span className="big-fix-icon"><WandSparkles/></span><h3>{f.title}</h3><p>{f.rationale}</p>{f.generated_content&&<FixContent content={f.generated_content}/>}<div className="lift"><span>Estimated lift<b>+{f.impact_low}–{f.impact_high}%</b></span><span>Status<b style={{color:statusColor[st]||"var(--muted)"}}>{statusLabel[st]||st}</b></span></div><div style={{display:"flex",gap:"6px",marginTop:"10px"}}>{(["pending","implementing","done"] as const).map(s=><button key={s} onClick={()=>setStatus(f.id,s)} disabled={busy||st===s} style={{flex:1,padding:"5px 0",fontSize:"11px",borderRadius:"6px",border:`1px solid ${st===s?statusColor[s]:"var(--line)"}`,background:st===s?statusColor[s]:"transparent",color:st===s?"#fff":"var(--muted)",cursor:st===s?"default":"pointer",fontWeight:st===s?700:400,transition:"all 0.15s"}}>{busy&&st!==s?"…":statusLabel[s]}</button>)}</div></article>})}
   </div>
  </>;
+}
+
+type SeoCheck={id:string;label:string;category:"technical"|"meta"|"content"|"social"|"schema";status:"pass"|"warning"|"fail";message:string;recommendation?:string};
+type SeoAuditResult={checks:SeoCheck[];seoScore:number;domain:string;fetchError:string|null};
+
+function SeoAuditTab({demo,domain}:{demo:boolean;domain:string}){
+ const [audit,setAudit]=useState<SeoAuditResult|null>(null);
+ const [loading,setLoading]=useState(false);
+ const [error,setError]=useState("");
+
+ async function runAudit(){
+  if(!domain){setError("No domain configured. Add a domain in brand settings.");return}
+  setLoading(true);setError("");
+  const r=await fetch(`/api/seo-audit?domain=${encodeURIComponent(domain)}`);
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok||j.error)setError(j.error||"SEO audit failed. Try again.");
+  else setAudit(j);
+  setLoading(false);
+ }
+
+ if(demo){
+  const da:SeoAuditResult={seoScore:72,domain:"acme.co",fetchError:null,checks:[
+   {id:"https",label:"HTTPS enabled",category:"technical",status:"pass",message:"Site uses HTTPS encryption"},
+   {id:"title",label:"Page title",category:"meta",status:"pass",message:'Title: "Acme Software - AI Workflow Tools" (38 chars)'},
+   {id:"meta_description",label:"Meta description",category:"meta",status:"warning",message:"Found (95 chars)",recommendation:"Description too short — aim for 100–160 characters"},
+   {id:"h1",label:"H1 heading",category:"content",status:"pass",message:"Single H1 tag found ✓"},
+   {id:"h2",label:"H2 subheadings",category:"content",status:"pass",message:"4 H2 headings found"},
+   {id:"og_tags",label:"Open Graph tags",category:"social",status:"warning",message:"og:title ✓  og:description ✓  og:image ✗",recommendation:"Add og:image for better social media previews"},
+   {id:"twitter_card",label:"Twitter/X Card",category:"social",status:"pass",message:"Twitter Card meta tag found"},
+   {id:"canonical",label:"Canonical URL",category:"technical",status:"pass",message:"Canonical tag present"},
+   {id:"schema",label:"Structured data (Schema.org)",category:"schema",status:"fail",message:"No structured data found",recommendation:"Add Schema.org markup (Organization or SoftwareApplication) — AI engines use structured data to cite and understand your brand"},
+   {id:"viewport",label:"Mobile viewport",category:"technical",status:"pass",message:"Viewport meta tag present — mobile-friendly"},
+   {id:"img_alt",label:"Image alt text",category:"content",status:"warning",message:"8/12 images have alt text",recommendation:"Add descriptive alt text to 4 images"},
+  ]};
+  return <SeoAuditResults audit={da}/>;
+ }
+
+ if(loading)return <div style={{textAlign:"center",padding:"60px 40px"}}><LoaderCircle className="spin" style={{width:"32px",color:"var(--sky)"}}/><p style={{marginTop:"12px",color:"var(--muted)",fontSize:"13px"}}>Auditing {domain}…</p></div>;
+ if(error)return <div style={{maxWidth:"480px"}}><div className="checker-error"><AlertCircle/><div><b>Audit failed</b><p>{error}</p></div></div><button className="button" style={{marginTop:"12px"}} onClick={runAudit}>Try again</button></div>;
+
+ if(!audit)return <div style={{textAlign:"center",padding:"60px 40px"}}>
+  <Globe style={{width:"40px",color:"var(--faint)",marginBottom:"16px"}}/>
+  <h3 style={{margin:"0 0 8px",font:"700 18px 'Outfit',system-ui",color:"var(--ink)"}}>Technical SEO Audit</h3>
+  <p style={{color:"var(--muted)",fontSize:"13px",maxWidth:"360px",margin:"0 auto 24px",lineHeight:1.6}}>Check your website for SEO issues that impact both traditional search rankings and AI engine visibility — schema, meta tags, content structure, and more.</p>
+  {!domain?<p style={{color:"var(--cr)",fontSize:"12px"}}>No domain configured for this brand.</p>:<button className="button" onClick={runAudit}><Globe size={14}/>Audit {domain}</button>}
+ </div>;
+
+ return <SeoAuditResults audit={audit} onRerun={runAudit}/>;
+}
+
+function SeoAuditResults({audit,onRerun}:{audit:SeoAuditResult;onRerun?:()=>void}){
+ const passed=audit.checks.filter(c=>c.status==="pass").length;
+ const warnings=audit.checks.filter(c=>c.status==="warning").length;
+ const failed=audit.checks.filter(c=>c.status==="fail").length;
+ const scoreColor=audit.seoScore>=70?"var(--em)":audit.seoScore>=50?"var(--am)":"var(--cr)";
+ const cats:[SeoCheck["category"],string][]=[["technical","Technical SEO"],["meta","Meta Tags"],["content","Content"],["social","Social & Sharing"],["schema","Structured Data"]];
+ const sIcon=(s:string)=>s==="pass"?"✓":s==="warning"?"!":"✗";
+ const sBg=(s:string)=>s==="pass"?"var(--em-d,#DCFCE7)":s==="warning"?"var(--am-d,#FEF3C7)":"#FEE2E2";
+ const sColor=(s:string)=>s==="pass"?"var(--em)":s==="warning"?"var(--am)":"var(--cr)";
+ return <div>
+  <div style={{display:"grid",gridTemplateColumns:"auto 1fr auto",alignItems:"center",gap:"24px",background:"var(--surface)",border:"1px solid var(--line)",borderRadius:"10px",padding:"20px 24px",marginBottom:"14px",borderLeft:`4px solid ${scoreColor}`}}>
+   <div><div style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",fontWeight:700,letterSpacing:"1px",marginBottom:"4px"}}>SEO Score</div><div style={{fontSize:"52px",fontWeight:800,fontFamily:"Outfit,system-ui",color:scoreColor,letterSpacing:"-2px",lineHeight:1}}>{audit.seoScore}</div></div>
+   <div style={{display:"flex",gap:"20px",paddingLeft:"8px"}}>
+    <div style={{textAlign:"center"}}><div style={{fontSize:"24px",fontWeight:800,fontFamily:"Outfit",color:"var(--em)",letterSpacing:"-1px"}}>{passed}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>Passed</div></div>
+    <div style={{textAlign:"center"}}><div style={{fontSize:"24px",fontWeight:800,fontFamily:"Outfit",color:"var(--am)",letterSpacing:"-1px"}}>{warnings}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>Warnings</div></div>
+    <div style={{textAlign:"center"}}><div style={{fontSize:"24px",fontWeight:800,fontFamily:"Outfit",color:"var(--cr)",letterSpacing:"-1px"}}>{failed}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>Failed</div></div>
+   </div>
+   <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"6px"}}><span style={{fontSize:"12px",color:"var(--muted)"}}>Audited: <b style={{color:"var(--ink)"}}>{audit.domain}</b></span>{onRerun&&<button className="button outline" onClick={onRerun} style={{fontSize:"12px",padding:"6px 12px"}}>Re-audit</button>}</div>
+  </div>
+  {cats.map(([key,label])=>{const cc=audit.checks.filter(c=>c.category===key);if(!cc.length)return null;return <article key={key} className="panel" style={{marginBottom:"10px"}}>
+   <div className="panel-head"><div><h3>{label}</h3></div></div>
+   <div>{cc.map(c=><div key={c.id} style={{display:"flex",gap:"12px",alignItems:"flex-start",padding:"12px 16px",borderBottom:"1px solid var(--line)"}}>
+    <span style={{fontSize:"10px",fontWeight:800,width:"20px",height:"20px",minWidth:"20px",borderRadius:"50%",background:sBg(c.status),color:sColor(c.status),display:"flex",alignItems:"center",justifyContent:"center",marginTop:"1px"}}>{sIcon(c.status)}</span>
+    <div style={{flex:1}}><div style={{fontWeight:600,fontSize:"13px",color:"var(--ink)"}}>{c.label}</div><div style={{fontSize:"12px",color:"var(--muted)",marginTop:"2px"}}>{c.message}</div>{c.recommendation&&<div style={{fontSize:"11px",color:"var(--sky)",marginTop:"5px",fontWeight:600}}>→ {c.recommendation}</div>}</div>
+    <span style={{fontSize:"10px",fontWeight:700,padding:"2px 7px",borderRadius:"4px",background:sBg(c.status),color:sColor(c.status),flexShrink:0,textTransform:"uppercase"}}>{c.status}</span>
+   </div>)}</div>
+  </article>})}
+  {audit.fetchError&&<p style={{fontSize:"11px",color:"var(--am)",lineHeight:1.5}}>Note: Could not fully fetch {audit.domain} ({audit.fetchError}). Some checks may be incomplete or based on partial data.</p>}
+ </div>
 }
 
 // Real mode (demo=false) diverges deliberately from the static demo below: the "Share of AI
@@ -512,7 +701,7 @@ function ReportViewer({runId,report,loading,history,onClose}:{runId:string;repor
        <div style={{fontSize:"96px",fontWeight:800,lineHeight:1,fontFamily:"Outfit,system-ui",color:"#0EA5E9",letterSpacing:"-5px"}}>{report.run.score}</div>
        <div style={{marginTop:"14px",display:"flex",gap:"8px",flexWrap:"wrap"}}>
         <span style={{fontSize:"12px",color:"#94A3B8",padding:"4px 10px",borderRadius:"5px",background:"rgba(255,255,255,.07)"}}>{report.run.mentions}/{report.run.total} mentions</span>
-        {report.run.confidence!=null&&<span style={{fontSize:"12px",color:"#94A3B8",padding:"4px 10px",borderRadius:"5px",background:"rgba(255,255,255,.07)"}}>{confidenceLabel(report.run.confidence)}</span>}
+        {report.run.confidence!=null&&<span style={{fontSize:"12px",color:"#94A3B8",padding:"4px 10px",borderRadius:"5px",background:"rgba(255,255,255,.07)"}}>{coverageLabel(report.run.confidence)}</span>}
        </div>
       </div>
       <div style={{marginLeft:"auto",textAlign:"right",paddingTop:"4px"}}>
