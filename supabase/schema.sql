@@ -134,6 +134,14 @@ create table public.subscriptions (
   status text,
   current_period_end timestamptz
 );
+create table public.gsc_tokens (
+  workspace_id uuid primary key references public.workspaces(id) on delete cascade,
+  access_token text not null,
+  refresh_token text,
+  expires_at timestamptz,
+  property_url text,
+  created_at timestamptz not null default now()
+);
 
 alter table public.profiles enable row level security;
 alter table public.workspaces enable row level security;
@@ -147,6 +155,7 @@ alter table public.fixes enable row level security;
 alter table public.reports enable row level security;
 alter table public.usage_months enable row level security;
 alter table public.subscriptions enable row level security;
+alter table public.gsc_tokens enable row level security;
 
 create function public.is_workspace_member(target uuid) returns boolean language sql stable security definer set search_path='' as $$
   select exists(select 1 from public.workspace_members m where m.workspace_id=target and m.user_id=auth.uid());
@@ -158,6 +167,7 @@ create policy "members read scans" on public.scan_runs for select using (public.
 create policy "members read reports" on public.reports for select using (public.is_workspace_member(workspace_id));
 create policy "members read usage" on public.usage_months for select using (public.is_workspace_member(workspace_id));
 create policy "members read subscriptions" on public.subscriptions for select using (public.is_workspace_member(workspace_id));
+create policy "members manage gsc_tokens" on public.gsc_tokens for all using (public.is_workspace_member(workspace_id)) with check (public.is_workspace_member(workspace_id));
 -- These three were missing: RLS was enabled on profiles/workspace_members/competitors with
 -- zero policies defined, which under Postgres RLS means deny-all, not "no restriction" —
 -- every query against them would silently return zero rows. Required for basic auth/data

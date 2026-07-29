@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Activity, AlertCircle, ArrowDownRight, ArrowLeft, ArrowUpRight, BarChart3, Bell, Check, ChevronDown, CircleHelp, Edit2, FileText, Gauge, Globe, LayoutDashboard, LoaderCircle, LogOut, Menu, Moon, MoreHorizontal, Play, Plus, Radar, Search, Settings, Sparkles, Sun, Target, Trash2, TrendingUp, Users, WandSparkles, X } from "lucide-react";
+import { Activity, AlertCircle, ArrowDownRight, ArrowLeft, ArrowUpRight, BarChart3, Bell, Check, ChevronDown, CircleHelp, Edit2, FileText, Gauge, Globe, LayoutDashboard, Link2, LoaderCircle, LogOut, Menu, Moon, MoreHorizontal, Play, Plus, Radar, Search, Settings, Sparkles, Sun, Target, Trash2, TrendingUp, Users, WandSparkles, X } from "lucide-react";
 import { supabaseConfigured } from "@/lib/supabase/config";
 import type { Brand, Competitor, Fix, Prompt, WorkspaceContext } from "@/lib/data/types";
 import type { ScanAnswerRow } from "@/lib/data/stats";
@@ -36,6 +36,11 @@ export default function AppPage(){
  const [theme,setTheme]=useState<'light'|'dark'>('light');
  useEffect(()=>{const saved=localStorage.getItem('av-theme') as 'light'|'dark'|null;const t=saved||(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');setTheme(t);document.documentElement.setAttribute('data-theme',t);},[]);
  function toggleTheme(){const n=theme==='light'?'dark':'light';setTheme(n);document.documentElement.setAttribute('data-theme',n);localStorage.setItem('av-theme',n)}
+ useEffect(()=>{
+  const p=new URLSearchParams(window.location.search);
+  if(p.get("gsc_connected")){setToast("Google Search Console connected!");setSection("settings");window.history.replaceState({},"","/app")}
+  if(p.get("gsc_error")){setToast("GSC connection failed: "+p.get("gsc_error"));window.history.replaceState({},"","/app")}
+ },[]);
 
  useEffect(()=>{
   if(demo)return;
@@ -228,7 +233,7 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
    <article className="panel opportunities"><PanelHead title="Top opportunities" sub="AI-recommended actions ranked by impact" action={<button onClick={()=>setSection("fixes")}>View all</button>}/>{[{t:"Add direct comparison content",p:"Your competitors win 14 prompts with comparison pages.",impact:"High",lift:"+12–18%"},{t:"Strengthen third-party citations",p:"AI engines cite 3 sources that don't mention your brand.",impact:"High",lift:"+8–14%"},{t:"Add SoftwareApplication schema",p:"Help engines understand your product entity and pricing.",impact:"Med",lift:"+4–7%"}].map(o=><div className="opportunity" key={o.t}><span className="opp-icon"><Sparkles/></span><div><b>{o.t}</b><p>{o.p}</p><small><em className={o.impact==="High"?"high":"medium"}>{o.impact} impact</em>Estimated lift <strong>{o.lift}</strong></small></div><button onClick={()=>setSection("fixes")}>Fix this <ArrowUpRight/></button></div>)}</article>
    </div>
   </>}
-  {overviewTab==="traffic"&&<TrafficInsights demo answers={[]} history={[]}/>}
+  {overviewTab==="traffic"&&<GscTrafficTab demo brandId={undefined}/>}
   {overviewTab==="rankings"&&<RankingsDetail demo answers={[]}/>}
  </>;
 
@@ -257,7 +262,7 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
    </div>
    {fixes.length>0&&<article className="panel opportunities" style={{marginTop:"14px"}}><PanelHead title="Top AI-generated fixes" sub="Claude&apos;s recommendations from your most recent scan" action={<button onClick={()=>setSection("fixes")}>View all <ArrowUpRight/></button>}/>{fixes.slice(0,3).map(f=><div className="opportunity" key={f.id}><span className="opp-icon"><Sparkles/></span><div><b>{f.title}</b><p>{f.rationale}</p><small><em className={(f.impact_high||0)>=12?"high":"medium"}>{(f.impact_high||0)>=12?"High":"Med"} impact</em>Estimated lift <strong>+{f.impact_low}–{f.impact_high}%</strong></small></div><button onClick={()=>setSection("fixes")}>View fix <ArrowUpRight/></button></div>)}</article>}
   </>}
-  {overviewTab==="traffic"&&<TrafficInsights demo={false} answers={latest.answers} history={history}/>}
+  {overviewTab==="traffic"&&<GscTrafficTab demo={false} brandId={brand?.id}/>}
   {overviewTab==="rankings"&&<RankingsDetail demo={false} answers={latest.answers}/>}
  </>;
 }
@@ -270,41 +275,93 @@ function groupByEngine(answers:ScanAnswerRow[]){
  return Array.from(byKey.entries()).map(([key,list])=>{const meta=engineByKey[key]||{name:key,short:key[0]?.toUpperCase()||"?",color:"green"};const pct=list.length?Math.round(list.filter(a=>a.brand_mentioned).length/list.length*100):0;return {key,name:meta.name,short:meta.short,color:meta.color,pct}});
 }
 
-const ENG_REACH:Record<string,number>={openai:2_800_000_000,gemini:450_000_000,perplexity:120_000_000,anthropic:60_000_000,deepseek:250_000_000,ai_overviews:900_000_000};
 const ENG_KEY_MAP:Record<string,string>={ChatGPT:"openai",Gemini:"gemini",Perplexity:"perplexity",Claude:"anthropic",DeepSeek:"deepseek","AI Overviews":"ai_overviews"};
 function fmtNum(n:number){if(n>=1_000_000)return(n/1_000_000).toFixed(1)+"M";if(n>=1_000)return(n/1_000).toFixed(0)+"K";return n.toString()}
 
-function TrafficInsights({demo,answers,history}:{demo:boolean;answers:ScanAnswerRow[];history:ScanHistoryEntry[]}){
- const rows=(demo?demoEngines.map(e=>({key:ENG_KEY_MAP[e.name]||e.name,name:e.name,short:e.short,color:e.color,pct:e.score})):groupByEngine(answers))
-  .map(e=>({...e,reach:ENG_REACH[e.key]||0,est:Math.round((ENG_REACH[e.key]||0)*(e.pct/100)*0.0015)}));
- const total=rows.reduce((s,r)=>s+r.est,0);
- const sparkData=demo?[{score:51,date:""},{score:58,date:""},{score:62,date:""},{score:67,date:""}]:history.map(h=>({score:h.score,date:h.completedAt||""}));
- return <div>
-  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px",marginBottom:"14px"}}>
-   <article className="panel" style={{padding:"20px 24px",borderLeft:"4px solid var(--sky)"}}>
-    <div style={{fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--muted)",marginBottom:"4px"}}>Est. Monthly AI Impressions</div>
-    <div style={{fontSize:"48px",fontWeight:800,fontFamily:"Outfit,system-ui",color:"var(--sky)",letterSpacing:"-2px",lineHeight:1}}>{fmtNum(total)}</div>
-    <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"6px"}}>Brand impressions across all AI engines · directional estimate</div>
-   </article>
-   <article className="panel" style={{padding:"20px 24px"}}>
-    <div style={{fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--muted)",marginBottom:"8px"}}>Score trend</div>
-    {sparkData.length>=2?<Sparkline data={sparkData}/>:<p style={{fontSize:"12px",color:"var(--muted)"}}>Run more scans to see trend</p>}
-    {sparkData.length>=2&&<div style={{fontSize:"11px",color:"var(--muted)",marginTop:"6px"}}>{sparkData.length} scan{sparkData.length!==1?"s":""} tracked</div>}
-   </article>
-  </div>
-  <article className="panel" style={{marginBottom:"14px"}}>
-   <div className="panel-head"><div><h3>Engine reach breakdown</h3><p>Estimated monthly brand impressions per AI engine, based on mention rate × engine reach</p></div></div>
-   <div className="table-wrap"><table><thead><tr><th>Engine</th><th>Mention rate</th><th>Est. engine queries/mo</th><th>Est. brand impressions</th><th>Tier</th></tr></thead>
-   <tbody>{rows.map(r=>{const tier=r.pct>=60?"Top":r.pct>=30?"Good":r.pct>=10?"Low":"Minimal";const tc=r.pct>=60?"var(--em)":r.pct>=30?"var(--sky)":r.pct>=10?"var(--am)":"var(--cr)";return <tr key={r.key}>
-    <td><div style={{display:"flex",alignItems:"center",gap:"8px"}}><span className={`engine-logo ${r.color}`}>{r.short}</span><b>{r.name}</b></div></td>
-    <td><span style={{fontWeight:700,color:tc}}>{r.pct}%</span></td>
-    <td style={{color:"var(--muted)"}}>{fmtNum(r.reach)}</td>
-    <td style={{fontWeight:600,fontVariantNumeric:"tabular-nums"}}>{fmtNum(r.est)}</td>
-    <td><span style={{fontSize:"10px",fontWeight:700,padding:"2px 7px",borderRadius:"99px",background:`color-mix(in srgb,${tc} 14%,transparent)`,color:tc}}>{tier}</span></td>
-   </tr>})}</tbody></table></div>
+type GscData={connected:boolean;propertyUrl?:string;overview:{impressions:number;clicks:number;ctr:number;position:number};queries:{query:string;impressions:number;clicks:number;ctr:number;position:number}[];trend:{date:string;impressions:number;clicks:number}[]};
+
+function GscTrafficTab({demo,brandId}:{demo:boolean;brandId?:string}){
+ const [status,setStatus]=useState<"idle"|"loading"|"connected"|"disconnected"|"error">("idle");
+ const [data,setData]=useState<GscData|null>(null);
+ const [disconnecting,setDisconnecting]=useState(false);
+ const [retryKey,setRetryKey]=useState(0);
+ useEffect(()=>{
+  if(demo||!brandId){setStatus("disconnected");return}
+  setStatus("loading");
+  fetch(`/api/gsc/metrics?brandId=${brandId}`)
+   .then(r=>r.json())
+   .then((d:GscData)=>{if(d.connected){setData(d);setStatus("connected")}else setStatus("disconnected")})
+   .catch(()=>setStatus("error"));
+ },[demo,brandId,retryKey]);
+ async function disconnect(){
+  if(!brandId)return;
+  setDisconnecting(true);
+  try{await fetch(`/api/gsc/disconnect?brandId=${brandId}`,{method:"DELETE"});setStatus("disconnected");setData(null)}
+  finally{setDisconnecting(false)}
+ }
+ if(status==="loading")return <div style={{padding:"48px",textAlign:"center",color:"var(--muted)"}}><LoaderCircle size={24} style={{animation:"spin 1s linear infinite",display:"inline-block"}}/><p style={{marginTop:"12px",fontSize:"13px"}}>Loading Search Console data…</p></div>;
+ if(status==="error")return <article className="panel" style={{padding:"40px",textAlign:"center"}}><AlertCircle size={28} color="var(--cr)"/><p style={{marginTop:"12px",fontSize:"14px",color:"var(--ink)"}}>Failed to load Search Console data</p><button className="button outline" style={{marginTop:"16px"}} onClick={()=>setRetryKey(k=>k+1)}>Retry</button></article>;
+ if(status==="disconnected"||status==="idle")return(
+  <article className="panel" style={{padding:"56px 32px",textAlign:"center"}}>
+   <div style={{width:"60px",height:"60px",borderRadius:"16px",background:"color-mix(in srgb,var(--sky) 12%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px"}}><TrendingUp size={30} color="var(--sky)"/></div>
+   <h3 style={{fontSize:"18px",fontWeight:700,margin:"0 0 8px"}}>Connect Google Search Console</h3>
+   <p style={{fontSize:"13px",color:"var(--muted)",maxWidth:"400px",margin:"0 auto 24px",lineHeight:1.7}}>See your real impressions, clicks, CTR, and ranking positions from Google Search — updated daily.</p>
+   {!demo&&brandId
+    ?<a href={`/api/gsc/auth?brandId=${brandId}`} className="button" style={{textDecoration:"none",display:"inline-flex",alignItems:"center",gap:"7px"}}><Link2 size={15}/>Connect Google Search Console</a>
+    :<button className="button" disabled>Connect Google Search Console</button>}
+   <p style={{fontSize:"11px",color:"var(--muted)",marginTop:"16px"}}>Read-only access · you can disconnect any time</p>
   </article>
-  <p style={{fontSize:"11px",color:"var(--muted)",lineHeight:1.5}}>* Estimates based on publicly reported engine usage (ChatGPT ~2.8B/mo, AI Overviews ~900M, DeepSeek ~250M, Gemini ~450M, Perplexity ~120M, Claude ~60M) × your tracked mention rate × 0.15% topic relevance factor. Actual reach varies by query specificity and region.</p>
- </div>
+ );
+ if(status==="connected"&&data){
+  const maxImp=Math.max(1,...data.trend.map(t=>t.impressions));
+  return <div>
+   <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"12px",marginBottom:"14px"}}>
+    <article className="panel" style={{padding:"18px 20px",borderLeft:"4px solid var(--sky)"}}>
+     <div style={{fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--muted)",marginBottom:"4px"}}>Impressions</div>
+     <div style={{fontSize:"38px",fontWeight:800,fontFamily:"Outfit,system-ui",color:"var(--sky)",letterSpacing:"-1.5px",lineHeight:1}}>{fmtNum(data.overview.impressions)}</div>
+     <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"4px"}}>last 28 days</div>
+    </article>
+    <article className="panel" style={{padding:"18px 20px",borderLeft:"4px solid var(--em)"}}>
+     <div style={{fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--muted)",marginBottom:"4px"}}>Clicks</div>
+     <div style={{fontSize:"38px",fontWeight:800,fontFamily:"Outfit,system-ui",color:"var(--em)",letterSpacing:"-1.5px",lineHeight:1}}>{fmtNum(data.overview.clicks)}</div>
+     <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"4px"}}>last 28 days</div>
+    </article>
+    <article className="panel" style={{padding:"18px 20px"}}>
+     <div style={{fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--muted)",marginBottom:"4px"}}>Avg CTR</div>
+     <div style={{fontSize:"38px",fontWeight:800,fontFamily:"Outfit,system-ui",color:"var(--ink)",letterSpacing:"-1.5px",lineHeight:1}}>{data.overview.ctr}%</div>
+     <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"4px"}}>click-through rate</div>
+    </article>
+    <article className="panel" style={{padding:"18px 20px"}}>
+     <div style={{fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--muted)",marginBottom:"4px"}}>Avg Position</div>
+     <div style={{fontSize:"38px",fontWeight:800,fontFamily:"Outfit,system-ui",color:"var(--ink)",letterSpacing:"-1.5px",lineHeight:1}}>#{data.overview.position}</div>
+     <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"4px"}}>in Google Search</div>
+    </article>
+   </div>
+   {data.trend.length>0&&<article className="panel" style={{padding:"20px 24px",marginBottom:"14px"}}>
+    <div style={{fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--muted)",marginBottom:"12px"}}>Daily impressions — last 28 days</div>
+    <div style={{display:"flex",gap:"3px",alignItems:"flex-end",height:"54px"}}>
+     {data.trend.map((t,i)=><div key={i} title={`${t.date}: ${fmtNum(t.impressions)}`}
+      style={{flex:1,background:"var(--sky)",borderRadius:"2px 2px 0 0",opacity:.5+(t.impressions/maxImp)*.5,height:`${Math.max(4,(t.impressions/maxImp)*54)}px`,transition:"height .2s"}}/>)}
+    </div>
+   </article>}
+   {data.queries.length>0&&<article className="panel" style={{marginBottom:"14px"}}>
+    <div className="panel-head"><div><h3>Top queries</h3><p>Search terms driving the most impressions in the last 28 days</p></div></div>
+    <div className="table-wrap"><table><thead><tr><th>Query</th><th>Impressions</th><th>Clicks</th><th>CTR</th><th>Avg position</th></tr></thead>
+    <tbody>{data.queries.map((q,i)=><tr key={i}>
+     <td style={{maxWidth:"320px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{q.query}</td>
+     <td style={{fontVariantNumeric:"tabular-nums"}}>{fmtNum(q.impressions)}</td>
+     <td style={{fontVariantNumeric:"tabular-nums"}}>{fmtNum(q.clicks)}</td>
+     <td>{q.ctr}%</td>
+     <td>#{q.position}</td>
+    </tr>)}</tbody></table></div>
+   </article>}
+   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:"11px",color:"var(--muted)",padding:"0 2px"}}>
+    <span>Connected: {data.propertyUrl}</span>
+    <button onClick={disconnect} disabled={disconnecting} style={{fontSize:"11px",color:"var(--cr)",background:"none",border:"none",cursor:"pointer",padding:"4px 8px",borderRadius:"5px"}}>{disconnecting?"Disconnecting…":"Disconnect GSC"}</button>
+   </div>
+  </div>;
+ }
+ return null;
 }
 
 function RankingsDetail({demo,answers}:{demo:boolean;answers:ScanAnswerRow[]}){
@@ -744,7 +801,7 @@ const WEEK_DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Sa
 const FREQ_LABEL:{[k:string]:string}={weekly:"Weekly",monthly:"Monthly",off:"Off (manual only)"};
 
 function SettingsPage({demo,brand,ctx}:{demo:boolean;brand?:Brand;ctx:WorkspaceContext|null}){
- const [tab,setTab]=useState("schedule");
+ const [tab,setTab]=useState<string>("schedule");
  const [frequency,setFrequency]=useState<"weekly"|"monthly"|"off">("weekly");
  const [scanDay,setScanDay]=useState(1);
  const [saving,setSaving]=useState(false);
@@ -757,6 +814,7 @@ function SettingsPage({demo,brand,ctx}:{demo:boolean;brand?:Brand;ctx:WorkspaceC
    <article className="panel settings-nav">
     <button className={tab==="schedule"?"active":""} onClick={()=>setTab("schedule")}><Radar/>Scan schedule</button>
     <button className={tab==="brand"?"active":""} onClick={()=>setTab("brand")}><Target/>Brand profile</button>
+    <button className={tab==="integrations"?"active":""} onClick={()=>setTab("integrations")}><Link2/>Integrations</button>
     <button><Bell/>Notifications</button>
     <button><Users/>Team members</button>
     <button><BarChart3/>Billing &amp; usage</button>
@@ -788,6 +846,58 @@ function SettingsPage({demo,brand,ctx}:{demo:boolean;brand?:Brand;ctx:WorkspaceC
      <label>Brand description<textarea defaultValue={demo?"AI-powered workflow software for growing SaaS teams.":(brand?.description||"")} rows={3}/></label>
      <button className="button">Save changes</button>
     </>}
+    {tab==="integrations"&&<>
+     <h3>Integrations</h3>
+     <p style={{marginBottom:"24px"}}>Connect external tools to enrich your dashboard with real data.</p>
+     <div style={{border:"1px solid var(--line)",borderRadius:"10px",overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"18px 20px"}}>
+       <div style={{display:"flex",alignItems:"center",gap:"14px"}}>
+        <div style={{width:"40px",height:"40px",borderRadius:"10px",background:"#4285F4",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+         <TrendingUp size={20} color="#fff"/>
+        </div>
+        <div>
+         <div style={{fontWeight:700,fontSize:"14px"}}>Google Search Console</div>
+         <div style={{fontSize:"12px",color:"var(--muted)",marginTop:"2px"}}>Real impressions, clicks, CTR and rankings from Google Search</div>
+        </div>
+       </div>
+       <GscSettingsStatus demo={demo} brandId={brand?.id}/>
+      </div>
+     </div>
+    </>}
    </article>
   </div></>;
+}
+
+function GscSettingsStatus({demo,brandId}:{demo:boolean;brandId?:string}){
+ const [status,setStatus]=useState<"loading"|"connected"|"disconnected">("loading");
+ const [propertyUrl,setPropertyUrl]=useState("");
+ const [disconnecting,setDisconnecting]=useState(false);
+ useEffect(()=>{
+  if(demo||!brandId){setStatus("disconnected");return}
+  fetch(`/api/gsc/metrics?brandId=${brandId}`)
+   .then(r=>r.json())
+   .then((d:{connected:boolean;propertyUrl?:string})=>{if(d.connected){setPropertyUrl(d.propertyUrl||"");setStatus("connected")}else setStatus("disconnected")})
+   .catch(()=>setStatus("disconnected"));
+ },[demo,brandId]);
+ async function disconnect(){
+  if(!brandId)return;
+  setDisconnecting(true);
+  await fetch(`/api/gsc/disconnect?brandId=${brandId}`,{method:"DELETE"});
+  setDisconnecting(false);
+  setStatus("disconnected");
+  setPropertyUrl("");
+ }
+ if(status==="loading")return <span style={{fontSize:"12px",color:"var(--muted)"}}>Checking…</span>;
+ if(status==="connected")return(
+  <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+   <span style={{fontSize:"12px",color:"var(--em)",fontWeight:600,display:"flex",alignItems:"center",gap:"5px"}}><Check size={13}/>Connected{propertyUrl?` · ${propertyUrl.replace(/^(https?:\/\/|sc-domain:)/,"").replace(/\/$/,"")}`:""}
+   </span>
+   <button onClick={disconnect} disabled={disconnecting} style={{fontSize:"12px",color:"var(--cr)",background:"none",border:"1px solid var(--line)",borderRadius:"6px",padding:"5px 10px",cursor:"pointer"}}>{disconnecting?"Disconnecting…":"Disconnect"}</button>
+  </div>
+ );
+ return(
+  !demo&&brandId
+   ?<a href={`/api/gsc/auth?brandId=${brandId}`} className="button" style={{fontSize:"13px",textDecoration:"none",display:"inline-flex",alignItems:"center",gap:"6px",padding:"8px 16px"}}><Link2 size={13}/>Connect</a>
+   :<button className="button" disabled style={{fontSize:"13px",padding:"8px 16px"}}>Connect</button>
+ );
 }
