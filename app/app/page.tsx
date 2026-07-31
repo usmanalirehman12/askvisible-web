@@ -145,7 +145,7 @@ function BrandSwitcher({demo,ctx,activeBrandId,onSelectBrand,onBrandAdded}:{demo
  return <>
   <button className="brand-switch" onClick={()=>setModal(true)}><span>{active?active.name.slice(0,2).toUpperCase():"+"}</span><div><b>{active?active.name:"Add your first client"}</b><small>{ctx?`${ctx.plan.charAt(0).toUpperCase()}${ctx.plan.slice(1)} plan`:""}</small></div><ChevronDown/></button>
   {modal&&typeof document!=="undefined"&&createPortal(<div className="modal-back"><div className="modal"><button className="modal-x" onClick={()=>setModal(false)}><X/></button><span className="feature-icon"><Users/></span><h2>Your clients</h2>
-   {ctx&&ctx.brands.length>0?<ul className="client-list">{ctx.brands.map(b=><li key={b.id} className={b.id===active?.id?"active":""} onClick={()=>{onSelectBrand(b.id);setModal(false)}}><div><b>{b.name}</b><small>{b.domain}</small></div>{b.id===active?.id&&<Check size={15}/>}</li>)}</ul>:<p>No clients yet. Add your first client brand to start tracking AI-search visibility.</p>}
+   {ctx&&ctx.brands.length>0?<ul className="client-list">{ctx.brands.map(b=><li key={b.id}><button type="button" className={b.id===active?.id?"active":""} aria-current={b.id===active?.id||undefined} onClick={()=>{onSelectBrand(b.id);setModal(false)}}><div><b>{b.name}</b><small>{b.domain}</small></div>{b.id===active?.id&&<Check size={15}/>}</button></li>)}</ul>:<p>No clients yet. Add your first client brand to start tracking AI-search visibility.</p>}
    <form onSubmit={addClient}>
     <label>Client name<input required autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Acme Plumbing"/></label>
     <label>Website<input required value={domain} onChange={e=>setDomain(e.target.value)} placeholder="acmeplumbing.com"/></label>

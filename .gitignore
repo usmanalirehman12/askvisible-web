@@ -10,3 +10,9 @@ node_modules
 .agents/
 tsconfig.tsbuildinfo
 *.zip
+
+.vercel
+.env*
+
+# Office lock/temp files (created while an .xlsx or .docx is open)
+~$*
