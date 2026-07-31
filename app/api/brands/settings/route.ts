@@ -7,7 +7,7 @@ export async function PATCH(request: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json().catch(() => ({}));
-  const { brandId, scan_frequency, scan_day } = body;
+  const { brandId, scan_frequency, scan_day, name, domain, description } = body;
 
   if (!brandId) return NextResponse.json({ error: "brandId required" }, { status: 400 });
 
@@ -15,9 +15,12 @@ export async function PATCH(request: Request) {
   if (scan_frequency && !validFrequencies.includes(scan_frequency))
     return NextResponse.json({ error: "Invalid frequency" }, { status: 400 });
 
+  if (name !== undefined && !name.trim()) return NextResponse.json({ error: "Brand name is required" }, { status: 400 });
+  if (domain !== undefined && !domain.trim()) return NextResponse.json({ error: "Website is required" }, { status: 400 });
+
   const { error } = await supabase
     .from("brands")
-    .update({ scan_frequency, scan_day })
+    .update({ scan_frequency, scan_day, name, domain, description })
     .eq("id", brandId);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

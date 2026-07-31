@@ -1,18 +1,6 @@
 import { safePublicUrl } from "@/lib/security/url";
+import { metaTag as meta, pageTitle as title } from "./html-meta";
 import type { BrandProfile } from "./types";
-
-function decode(value: string) {
-  return value.replace(/&amp;/gi, "&").replace(/&quot;/gi, '"').replace(/&#39;/gi, "'").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-}
-function meta(html: string, key: string) {
-  const tags = html.match(/<meta\b[^>]*>/gi) || [];
-  for (const tag of tags) {
-    const prop = tag.match(/(?:name|property)=["']([^"']+)["']/i)?.[1]?.toLowerCase();
-    if (prop === key.toLowerCase()) return decode(tag.match(/content=["']([^"']*)["']/i)?.[1] || "");
-  }
-  return "";
-}
-function title(html: string) { return decode(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || ""); }
 
 export async function discoverBrand(input: string): Promise<BrandProfile> {
   let url = await safePublicUrl(input);

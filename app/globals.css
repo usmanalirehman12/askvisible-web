@@ -352,8 +352,13 @@ td .up,td .down{display:flex;align-items:center}td svg{width:12px}
 .auth-shell button.button{width:100%;justify-content:center;display:flex;align-items:center;gap:6px;margin-top:6px}
 .auth-shell small{display:block;text-align:center;margin-top:14px;color:var(--muted)}
 .client-list{list-style:none;margin:0 0 18px;padding:0;display:grid;gap:8px;max-height:220px;overflow-y:auto}
-.client-list li{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--soft);border-radius:8px;font-size:13px}
+.client-list li{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--soft);border-radius:8px;font-size:13px;cursor:pointer;border:1px solid transparent;transition:.15s}
+.client-list li:hover{border-color:var(--line2)}
+.client-list li.active{background:var(--sky-d);border-color:var(--sky);color:var(--sky)}
+.client-list li.active b{color:var(--sky)}
 .client-list li small{color:var(--muted)}
+.client-list li.active small{color:var(--sky)}
+.client-list li svg{width:16px;flex-shrink:0;color:var(--sky)}
 .modal-x{position:absolute;right:16px;top:16px;border:0;background:var(--soft);width:30px;height:30px;border-radius:7px;cursor:pointer}
 .modal-x svg{width:16px}
 .modal h2{font:700 21px 'Outfit',system-ui;margin:18px 0 5px;color:var(--ink)}

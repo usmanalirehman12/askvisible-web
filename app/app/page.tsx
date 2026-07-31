@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Activity, AlertCircle, ArrowDownRight, ArrowLeft, ArrowUpRight, BarChart3, Bell, Check, ChevronDown, CircleHelp, Edit2, FileText, Gauge, Globe, LayoutDashboard, Link2, LoaderCircle, LogOut, Menu, Moon, MoreHorizontal, Play, Plus, Radar, Search, Settings, Sparkles, Sun, Target, Trash2, TrendingUp, Users, WandSparkles, X } from "lucide-react";
@@ -60,7 +61,9 @@ export default function AppPage(){
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[]);
 
- const activeBrand=ctx?.brands[0];
+ const [activeBrandId,setActiveBrandId]=useState<string|null>(()=>typeof window!=="undefined"?localStorage.getItem("av-active-brand"):null);
+ const activeBrand=ctx?.brands.find(b=>b.id===activeBrandId)||ctx?.brands[0];
+ function selectBrand(id:string){setActiveBrandId(id);localStorage.setItem("av-active-brand",id)}
 
  async function scan(){
   if(demo){setScanning(true);setTimeout(()=>{setScanning(false);setToast("Scan complete — 4 new mentions found");setTimeout(()=>setToast(""),3500)},1800);return}
@@ -110,7 +113,7 @@ export default function AppPage(){
  return <main className="app-shell">{toast&&<div className="toast"><Check/>{toast}</div>}
   <aside className={`sidebar ${open?"open":""}`}>
    <div className="side-brand"><Link className="brand" href="/"><span className="brand-mark">a</span>askvisibleai</Link><button className="mobile-close" onClick={()=>setOpen(false)}><X/></button></div>
-   <BrandSwitcher demo={demo} ctx={ctx} onBrandAdded={b=>setCtx(c=>c?{...c,brands:[...c.brands,b]}:c)}/>
+   <BrandSwitcher demo={demo} ctx={ctx} activeBrandId={activeBrand?.id} onSelectBrand={selectBrand} onBrandAdded={b=>{setCtx(c=>c?{...c,brands:[...c.brands,b]}:c);selectBrand(b.id)}}/>
    <nav>{nav.map(n=><button key={n.id} className={section===n.id?"active":""} onClick={()=>{setSection(n.id);setOpen(false)}}><n.icon/>{n.label}</button>)}</nav>
    <div className="side-bottom">
     <button><CircleHelp/>Help & resources</button>
@@ -120,15 +123,15 @@ export default function AppPage(){
    </div>
   </aside>
   <section className="app-content"><header className="app-header"><button className="menu-btn" onClick={()=>setOpen(true)}><Menu/></button><div className="header-search"><Search/><input placeholder="Search prompts, reports, fixes…"/><kbd>⌘ K</kbd></div><div className="header-actions"><button className="icon-btn"><Bell/><i/></button><button className="icon-btn theme-toggle" onClick={toggleTheme} title={theme==='light'?'Switch to dark mode':'Switch to light mode'} aria-label="Toggle theme">{theme==='light'?<Moon size={18}/>:<Sun size={18}/>}</button><button className="scan-btn" onClick={scan} disabled={scanning}>{scanning?<LoaderCircle className="spin"/>:<Play/>}{scanning?(scanProgress?`${scanProgress.done}/${scanProgress.total} prompts…`:"Starting…"):"Run scan"}</button></div></header>
-    <div className="app-page">{section==="overview"?<Overview demo={demo} brand={activeBrand} refreshKey={refreshKey} scan={scan} scanning={scanning} setSection={setSection} firstName={firstName}/>:section==="prompts"?<Prompts demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:section==="fixes"?<Fixes demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:section==="competitors"?<Competitors demo={demo} brand={activeBrand}/>:section==="reports"?<Reports demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:<SettingsPage demo={demo} brand={activeBrand} ctx={ctx}/>}</div>
+    <div className="app-page">{section==="overview"?<Overview demo={demo} brand={activeBrand} refreshKey={refreshKey} scan={scan} scanning={scanning} setSection={setSection} firstName={firstName}/>:section==="prompts"?<Prompts demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:section==="fixes"?<Fixes demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:section==="competitors"?<Competitors demo={demo} brand={activeBrand}/>:section==="reports"?<Reports demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:<SettingsPage demo={demo} brand={activeBrand} ctx={ctx} onBrandUpdated={updated=>setCtx(c=>c?{...c,brands:c.brands.map(b=>b.id===updated.id?{...b,...updated}:b)}:c)}/>}</div>
   </section>
  </main>
 }
 
-function BrandSwitcher({demo,ctx,onBrandAdded}:{demo:boolean;ctx:WorkspaceContext|null;onBrandAdded:(b:Brand)=>void}){
+function BrandSwitcher({demo,ctx,activeBrandId,onSelectBrand,onBrandAdded}:{demo:boolean;ctx:WorkspaceContext|null;activeBrandId?:string;onSelectBrand:(id:string)=>void;onBrandAdded:(b:Brand)=>void}){
  const [modal,setModal]=useState(false),[name,setName]=useState(""),[domain,setDomain]=useState(""),[saving,setSaving]=useState(false),[error,setError]=useState("");
  if(demo)return <button className="brand-switch"><span>AC</span><div><b>Acme Software</b><small>Pro plan</small></div><ChevronDown/></button>;
- const active=ctx?.brands[0];
+ const active=ctx?.brands.find(b=>b.id===activeBrandId)||ctx?.brands[0];
  async function addClient(e:React.FormEvent){
   e.preventDefault();if(!ctx)return;setSaving(true);setError("");
   try{
@@ -141,15 +144,15 @@ function BrandSwitcher({demo,ctx,onBrandAdded}:{demo:boolean;ctx:WorkspaceContex
  }
  return <>
   <button className="brand-switch" onClick={()=>setModal(true)}><span>{active?active.name.slice(0,2).toUpperCase():"+"}</span><div><b>{active?active.name:"Add your first client"}</b><small>{ctx?`${ctx.plan.charAt(0).toUpperCase()}${ctx.plan.slice(1)} plan`:""}</small></div><ChevronDown/></button>
-  {modal&&<div className="modal-back"><div className="modal"><button className="modal-x" onClick={()=>setModal(false)}><X/></button><span className="feature-icon"><Users/></span><h2>Your clients</h2>
-   {ctx&&ctx.brands.length>0?<ul className="client-list">{ctx.brands.map(b=><li key={b.id}><b>{b.name}</b><small>{b.domain}</small></li>)}</ul>:<p>No clients yet. Add your first client brand to start tracking AI-search visibility.</p>}
+  {modal&&typeof document!=="undefined"&&createPortal(<div className="modal-back"><div className="modal"><button className="modal-x" onClick={()=>setModal(false)}><X/></button><span className="feature-icon"><Users/></span><h2>Your clients</h2>
+   {ctx&&ctx.brands.length>0?<ul className="client-list">{ctx.brands.map(b=><li key={b.id} className={b.id===active?.id?"active":""} onClick={()=>{onSelectBrand(b.id);setModal(false)}}><div><b>{b.name}</b><small>{b.domain}</small></div>{b.id===active?.id&&<Check size={15}/>}</li>)}</ul>:<p>No clients yet. Add your first client brand to start tracking AI-search visibility.</p>}
    <form onSubmit={addClient}>
     <label>Client name<input required autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Acme Plumbing"/></label>
     <label>Website<input required value={domain} onChange={e=>setDomain(e.target.value)} placeholder="acmeplumbing.com"/></label>
     {error&&<div className="checker-error"><AlertCircle/><div><b>Couldn&apos;t add client</b><p>{error}</p></div></div>}
     <button className="button" disabled={saving}>{saving?"Adding…":"Add client"}</button>
    </form>
-  </div></div>}
+  </div></div>,document.body)}
  </>;
 }
 
@@ -176,7 +179,7 @@ function useFixes(demo:boolean,brand:Brand|undefined,refreshKey:number){
  useEffect(()=>{
   if(demo||!brand)return;
   let cancelled=false;
-  (async()=>{const r=await fetch(`/api/fixes/list?brandId=${encodeURIComponent(brand.id)}`);const j=await r.json().catch(()=>({}));if(!cancelled)setFixes(j.fixes||[])})();
+  (async()=>{const [{createClient},{getFixes}]=await Promise.all([import("@/lib/supabase/client"),import("@/lib/data/fixes")]);const supabase=createClient();const rows=await getFixes(supabase,brand.id);if(!cancelled)setFixes(rows)})();
   return ()=>{cancelled=true};
  },[demo,brand,refreshKey]);
  return fixes;
@@ -526,16 +529,15 @@ function Fixes({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:num
 
  async function loadFixes(){
   if(!brand)return;
-  const r=await fetch(`/api/fixes/list?brandId=${encodeURIComponent(brand.id)}`);
-  const j=await r.json().catch(()=>({}));
-  if(j.rlsError)console.error("Fixes RLS error:",j.rlsError);
-  setFixes(j.fixes||[]);
+  const [{createClient},{getFixes}]=await Promise.all([import("@/lib/supabase/client"),import("@/lib/data/fixes")]);
+  const supabase=createClient();
+  setFixes(await getFixes(supabase,brand.id));
  }
 
  useEffect(()=>{
   if(demo||!brand){setLoading(false);return}
   let cancelled=false;
-  (async()=>{setLoading(true);const r=await fetch(`/api/fixes/list?brandId=${encodeURIComponent(brand.id)}`);const j=await r.json().catch(()=>({}));if(!cancelled){setFixes(j.fixes||[]);if(j.rlsError)console.error("Fixes RLS error:",j.rlsError);setLoading(false)}})();
+  (async()=>{setLoading(true);const [{createClient},{getFixes}]=await Promise.all([import("@/lib/supabase/client"),import("@/lib/data/fixes")]);const supabase=createClient();const rows=await getFixes(supabase,brand.id);if(!cancelled){setFixes(rows);setLoading(false)}})();
   return ()=>{cancelled=true};
  },[demo,brand,refreshKey]);
 
@@ -800,14 +802,31 @@ function ReportViewer({runId,report,loading,history,onClose}:{runId:string;repor
 const WEEK_DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 const FREQ_LABEL:{[k:string]:string}={weekly:"Weekly",monthly:"Monthly",off:"Off (manual only)"};
 
-function SettingsPage({demo,brand,ctx}:{demo:boolean;brand?:Brand;ctx:WorkspaceContext|null}){
+function SettingsPage({demo,brand,ctx,onBrandUpdated}:{demo:boolean;brand?:Brand;ctx:WorkspaceContext|null;onBrandUpdated:(updated:{id:string;name:string;domain:string;description:string})=>void}){
  const [tab,setTab]=useState<string>("schedule");
  const [frequency,setFrequency]=useState<"weekly"|"monthly"|"off">("weekly");
  const [scanDay,setScanDay]=useState(1);
  const [saving,setSaving]=useState(false);
  const [saved,setSaved]=useState(false);
- useEffect(()=>{if(brand){setFrequency(brand.scan_frequency||"weekly");setScanDay(brand.scan_day??1)}},[brand]);
+ const [brandName,setBrandName]=useState("");
+ const [brandDomain,setBrandDomain]=useState("");
+ const [brandDescription,setBrandDescription]=useState("");
+ const [brandSaving,setBrandSaving]=useState(false);
+ const [brandSaved,setBrandSaved]=useState(false);
+ const [brandError,setBrandError]=useState("");
+ useEffect(()=>{if(brand){setFrequency(brand.scan_frequency||"weekly");setScanDay(brand.scan_day??1);setBrandName(brand.name||"");setBrandDomain(brand.domain||"");setBrandDescription(brand.description||"")}},[brand]);
  async function saveSchedule(){if(!brand)return;setSaving(true);await fetch("/api/brands/settings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({brandId:brand.id,scan_frequency:frequency,scan_day:scanDay})});setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2500)}
+ async function saveBrandProfile(){
+  if(!brand)return;
+  if(!brandName.trim()||!brandDomain.trim()){setBrandError("Brand name and website are required");return}
+  setBrandSaving(true);setBrandError("");
+  const r=await fetch("/api/brands/settings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({brandId:brand.id,name:brandName.trim(),domain:brandDomain.trim(),description:brandDescription})});
+  const j=await r.json().catch(()=>({}));
+  setBrandSaving(false);
+  if(!r.ok){setBrandError(j.error||"Failed to save changes");return}
+  setBrandSaved(true);setTimeout(()=>setBrandSaved(false),2500);
+  onBrandUpdated({id:brand.id,name:brandName.trim(),domain:brandDomain.trim(),description:brandDescription});
+ }
  const nextScanLabel=frequency==="weekly"?`Every ${WEEK_DAYS[scanDay]} at 06:00 UTC`:frequency==="monthly"?`Day ${scanDay} of each month at 06:00 UTC`:"Disabled — use Run scan button";
  return <><div className="page-title"><div><span className="overline">SETTINGS</span><h1>Workspace settings</h1><p>Manage scan schedule, brand profile, and team.</p></div></div>
   <div className="settings-grid">
@@ -841,10 +860,11 @@ function SettingsPage({demo,brand,ctx}:{demo:boolean;brand?:Brand;ctx:WorkspaceC
     {tab==="brand"&&<>
      <h3>Brand profile</h3>
      <p>Used to identify mentions and compare your market position.</p>
-     <label>Brand name<input defaultValue={demo?"Acme Software":(brand?.name||"")} readOnly={!demo&&!!brand}/></label>
-     <label>Website<input defaultValue={demo?"acme.co":(brand?.domain||"")} readOnly={!demo&&!!brand}/></label>
-     <label>Brand description<textarea defaultValue={demo?"AI-powered workflow software for growing SaaS teams.":(brand?.description||"")} rows={3}/></label>
-     <button className="button">Save changes</button>
+     <label>Brand name<input value={demo?"Acme Software":brandName} onChange={e=>setBrandName(e.target.value)} readOnly={demo}/></label>
+     <label>Website<input value={demo?"acme.co":brandDomain} onChange={e=>setBrandDomain(e.target.value)} readOnly={demo}/></label>
+     <label>Brand description<textarea value={demo?"AI-powered workflow software for growing SaaS teams.":brandDescription} onChange={e=>setBrandDescription(e.target.value)} rows={3} readOnly={demo}/></label>
+     {brandError&&<p style={{color:"var(--cr)",fontSize:"12px",margin:"-8px 0 16px"}}>{brandError}</p>}
+     {!demo&&brand?<button className="button" onClick={saveBrandProfile} disabled={brandSaving} style={{minWidth:"140px"}}>{brandSaving?"Saving…":brandSaved?"Saved ✓":"Save changes"}</button>:<button className="button" disabled>Save changes</button>}
     </>}
     {tab==="integrations"&&<>
      <h3>Integrations</h3>

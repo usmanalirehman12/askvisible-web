@@ -1,16 +1,20 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateBuyerPrompts } from "@/lib/ai/buyer-prompts";
+import { scrapeHomepageMeta } from "@/lib/ai/scrape-edge";
 
 export const runtime = "edge";
 
 const PROMPT_MODEL = process.env.ANTHROPIC_FIX_MODEL || "claude-haiku-4-5-20251001";
 
-async function generatePromptsWithClaude(name: string, domain: string): Promise<string[]> {
+async function generatePromptsWithClaude(name: string, domain: string, site?: { title: string; description: string } | null): Promise<string[]> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error("no key");
 
-  const instruction = `Business name: ${name}\nWebsite: ${domain}\n\nGenerate 5 search queries a real buyer would type into ChatGPT, Perplexity, or Google when researching a product or service like this one. Rules:\n- Phrase them as natural buyer searches, not marketing copy\n- Cover different intents: discovery (best X for Y), comparison (X vs Y alternatives), and use-case (what should I use for Z)\n- For 4 of the 5, do NOT mention "${name}" by name — test whether the category surfaces it organically\n- 1 of the 5 should be "alternatives to ${name}" or "competitors to ${name}" to test direct brand consideration\n- Return ONLY a JSON array of 5 strings, no prose, no markdown\n\nExample format: ["query one","query two","query three","query four","query five"]`;
+  const siteContext = site?.description || site?.title
+    ? `\nWhat the site says about itself: ${(site.description || site.title).slice(0, 300)}`
+    : "";
+  const instruction = `Business name: ${name}\nWebsite: ${domain}${siteContext}\n\nGenerate 5 search queries a real buyer would type into ChatGPT, Perplexity, or Google when researching a product or service like this one. Rules:\n- Phrase them as natural buyer searches, not marketing copy\n- Cover different intents: discovery (best X for Y), comparison (X vs Y alternatives), and use-case (what should I use for Z)\n- For 4 of the 5, do NOT mention "${name}" by name — test whether the category surfaces it organically\n- 1 of the 5 should be "alternatives to ${name}" or "competitors to ${name}" to test direct brand consideration\n- Return ONLY a JSON array of 5 strings, no prose, no markdown\n\nExample format: ["query one","query two","query three","query four","query five"]`;
 
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -45,13 +49,19 @@ export async function POST(request: Request) {
 
     const brand = brandData as { id: string; workspace_id: string; name: string; domain: string; description: string | null; created_at: string };
 
+    // Best-effort homepage scrape to give Claude real context instead of just a name +
+    // domain string. Never blocks brand creation — falls back to null on any failure
+    // (unreachable site, non-HTML response, timeout) and prompt generation proceeds
+    // without it, same as before this scrape existed.
+    const site = await scrapeHomepageMeta(domain);
+
     // Generate prompts — Claude preferred, template fallback
     let queries: string[];
     let promptSource: "claude" | "template" = "claude";
     try {
-      queries = await generatePromptsWithClaude(name, domain);
+      queries = await generatePromptsWithClaude(name, domain, site);
     } catch {
-      queries = generateBuyerPrompts({ name, title: "", description: "" });
+      queries = generateBuyerPrompts({ name, title: site?.title || "", description: site?.description || "" });
       promptSource = "template";
     }
 
