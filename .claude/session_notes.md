@@ -103,7 +103,7 @@ Extended 2026-07-31 with two more files:
 - `lib/ai/scoring.test.ts` — the `score()` weighting (60/25/15), position credit decaying from #1 to #5 and clamping to zero at #6+, the 0.4 partial credit for a mention with no position, sentiment ordering (positive > neutral > negative), and the 0–100 bounds.
 - `lib/data/stats.test.ts` — `summarizeScan`: mention counts against total, `avgPosition` rounded to one decimal and null when nothing is ranked, `confidence ?? 0`, and the empty-scan case.
 
-45/45 passing. **CI is written but not yet enforcing** — see the blocked task under Short-term.
+45/45 passing, enforced in CI (`.github/workflows/ci.yml`) on every push to `master` and every PR.
 
 ### Google Search Console Integration (shipped 2026-07-29)
 - OAuth 2.0 flow: `/api/gsc/auth` → Google → `/api/gsc/callback` stores tokens
@@ -211,7 +211,8 @@ The `gsc_tokens` table + RLS policy must be run in Supabase SQL Editor. The SQL 
 
 ### Short-term (open)
 - [x] Manually verify the brand switcher fix in the live authenticated app — confirmed 2026-07-31, brand switching works
-- [ ] **BLOCKED — push the CI workflow.** `.github/workflows/ci.yml` is written and committed-ready locally (runs `npx tsc --noEmit` + `npm test` on push to `master` and on PRs), but GitHub rejects the push: *"refusing to allow a Personal Access Token to create or update workflow `.github/workflows/ci.yml` without `workflow` scope."* The git credential helper is also misconfigured (`git: 'credential-manager-core' is not a git command` on every push — harmless today, but worth fixing). **To unblock:** regenerate the PAT with the `workflow` scope ticked, or switch the remote to SSH. Then commit and push `.github/`. Everything else in that batch was split out and shipped in `05c549b`.
+- [x] **CI is live.** `.github/workflows/ci.yml` runs `npx tsc --noEmit` + `npm test` on pushes to `master` and on all PRs. Green on its first run (`3def649`).
+  - **Gotcha for next time:** the first push was rejected with *"refusing to allow a Personal Access Token to create or update workflow `.github/workflows/ci.yml` without `workflow` scope."* GitHub blocks any PAT from touching `.github/workflows/**` unless the token has the `workflow` scope specifically — `repo` alone is not enough. Fixed by regenerating the PAT with `repo` + `workflow` and clearing the cached credential from Windows Credential Manager. SSH auth sidesteps this entirely (keys have no scopes), if the token expiry ever gets annoying.
 - [x] Widen test coverage beyond `lib/ai/` — added `lib/ai/scoring.test.ts` (the real scoring fn lives in `lib/ai/scoring.ts`, not `lib/data/scoring.ts` as this note previously claimed) and `lib/data/stats.test.ts`. 45 tests total.
 - [x] Gitignore Office lock files — added `~$*` to `.gitignore`
 - [x] Keyboard accessibility for the brand switcher list — rows are now real `<button>`s inside each `<li>` (not `<li onClick>`), so they're tab-reachable and Enter/Space activatable natively with no ARIA. Added a `:focus-visible` ring and `aria-current` on the active brand. **Visual layout of this change is unverified** — the modal is auth-gated so I couldn't see it render; worth a glance next time you open the client switcher.
