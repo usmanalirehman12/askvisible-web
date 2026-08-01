@@ -49,7 +49,9 @@ export type Fix = {
   created_at: string;
 };
 
-export type ScanSummary = {
+// Not exported: nothing outside this file consumes it directly, it exists only as the
+// base of ScanResultWithAnswers below.
+type ScanSummary = {
   scanRunId: string;
   score: number;
   confidence: number;

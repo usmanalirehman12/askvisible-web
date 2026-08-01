@@ -208,3 +208,46 @@ begin
 end;
 $$;
 create trigger on_auth_user_created after insert on auth.users for each row execute function public.handle_new_user();
+
+-- Rate limiting for the unauthenticated public endpoints (/api/check, /api/audit).
+-- Each call spends real money (LLM fan-out, Google Places), so the counter has to
+-- survive serverless scale-out. The previous limiter lived in a module-level Map, which
+-- on Vercel gave every instance its own counter — "5 per hour" was really "5 per
+-- instance", and instances scale with load, so the ceiling rose exactly when it mattered.
+--
+-- Fixed window, one statement. Concurrent requests can't both read a stale count and
+-- each conclude they're under the limit, because the increment happens inside the upsert.
+-- Rows are ~50 bytes and keyed by bucket+IP; prune with
+--   delete from public.rate_limits where window_start < now() - interval '1 day';
+-- if the table ever grows enough to notice.
+create table public.rate_limits (
+  key text primary key,
+  window_start timestamptz not null default now(),
+  count integer not null default 0
+);
+alter table public.rate_limits enable row level security;
+-- No policies on purpose: RLS on with zero policies denies everyone. Only the
+-- service-role client (which bypasses RLS) touches this table.
+
+create function public.consume_rate_limit(p_key text, p_limit integer, p_window_seconds integer)
+  returns table(allowed boolean, retry_after integer)
+  language plpgsql security definer set search_path='' as $$
+declare
+  v_count integer;
+  v_window_start timestamptz;
+begin
+  insert into public.rate_limits as r (key, window_start, count)
+  values (p_key, now(), 1)
+  on conflict (key) do update
+    set count = case when r.window_start < now() - (p_window_seconds * interval '1 second') then 1 else r.count + 1 end,
+        window_start = case when r.window_start < now() - (p_window_seconds * interval '1 second') then now() else r.window_start end
+  returning r.count, r.window_start into v_count, v_window_start;
+
+  return query select
+    v_count <= p_limit,
+    greatest(0, p_window_seconds - extract(epoch from (now() - v_window_start))::integer);
+end;
+$$;
+-- security definer means this would otherwise be callable by anyone holding the anon key,
+-- who could burn a victim's window by guessing their key. Only the service role gets it.
+revoke all on function public.consume_rate_limit(text, integer, integer) from public, anon, authenticated;

@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "deadcode": "knip"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",
@@ -22,6 +23,7 @@
     "typescript": "^5.5.4"
   },
   "devDependencies": {
+    "knip": "^6.31.0",
     "vitest": "^4.1.10"
   }
 }

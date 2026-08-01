@@ -23,3 +23,8 @@ jobs:
 
       - name: Unit tests
         run: npm test
+
+      # Fails on unused files, exports and dependencies. Added after a cleanup pass found
+      # three orphaned files and two dead exports that typecheck and tests both waved through.
+      - name: Dead code
+        run: npm run deadcode
