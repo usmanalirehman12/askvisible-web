@@ -229,6 +229,17 @@ Results — correct in both themes:
 
 Gotcha for future runs: the in-app browser reports *stale* computed colors while `.client-list button`'s `transition:.15s` is in flight — it froze at the pre-toggle value for 3+ seconds and looked like a theming bug. Suppress with an injected `*{transition:none!important}`, or measure a freshly-created element. It's a quirk of that browser's computed-style serialization, not an app defect; the real modal mounts fresh in the current theme anyway. Same caveat for `outline` — it serializes the UA default over `:focus-visible`, so trust `el.matches(':focus-visible')` rather than the reported outline color.
 
+#### Running the dev preview from another working directory (fixed 2026-08-01)
+`preview_start` rejects any `launch.json` entry with an absolute `cwd` ("cwd must be a relative path within the project root") — and it validates *every* entry in the file, not just the one being started, so one bad entry blocks all of them. When Claude is running from a directory other than this repo (e.g. `D:\claude skill`), don't use `cwd`; point npm at the repo instead:
+
+```json
+{ "runtimeExecutable": "npm",
+  "runtimeArgs": ["--prefix", "C:\\Users\\zayns\\OneDrive\\Documents\\websitefixer", "run", "dev"],
+  "port": 3000 }
+```
+
+`npm --prefix` runs the script with the package folder as its working directory, so Next picks up `.env.local` and the app config normally. Verified: `✓ Ready`, `Environments: .env.local`, `GET / 200`, landing page renders, console clean. Running Claude from inside the repo makes all of this moot — `.claude/launch.json` here already has a plain `npm run dev` entry that works as-is.
+
 ### Medium-term
 - [ ] Competitor scan flow — scan competitors against the same prompts and compare
 - [ ] Notifications tab in Settings (email alerts for score drops)
