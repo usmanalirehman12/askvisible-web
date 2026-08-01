@@ -201,12 +201,12 @@ summary.getRange("A4:B4").values = [["Portfolio metric", "Count"]];
 summary.getRange("A5:A7").values = [
   ["Unique names checked"],
   ["Names with ≥1 confirmed potential domain"],
-  ["Names requiring further verification"],
+  ["Unconfirmed domain checks"],
 ];
 summary.getRange("B5:B7").formulas = [
   ["=COUNTA('All Results'!$A$5:$A$414)"],
   ['=COUNTIF(\'All Results\'!$H$5:$H$414,"Yes")'],
-  ['=COUNTIF(\'All Results\'!$C$5:$C$414,"Unconfirmed*")+COUNTIF(\'All Results\'!$E$5:$E$414,"Unconfirmed*")+COUNTIF(\'All Results\'!$G$5:$G$414,"Unconfirmed*")'],
+  ["=SUM(D11:D13)"],
 ];
 summary.getRange("A4:B7").format.borders = { preset: "outside", style: "thin", color: palette.line };
 summary.getRange("A4:B4").format = {
