@@ -29,11 +29,3 @@ export async function getWorkspaceContext(supabase: SupabaseClient): Promise<Wor
     brands: (brands as Brand[]) || []
   };
 }
-
-// Inserts the brand row only. Prompt generation is handled server-side in /api/brands
-// so it can call Claude with ANTHROPIC_API_KEY (not available in the browser).
-export async function createBrand(supabase: SupabaseClient, workspaceId: string, name: string, domain: string): Promise<Brand> {
-  const { data, error } = await supabase.from("brands").insert({ workspace_id: workspaceId, name, domain }).select().single();
-  if (error) throw new Error(error.message || error.details || "Database error inserting brand");
-  return data as Brand;
-}
