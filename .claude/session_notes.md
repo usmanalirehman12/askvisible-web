@@ -215,7 +215,19 @@ The `gsc_tokens` table + RLS policy must be run in Supabase SQL Editor. The SQL 
   - **Gotcha for next time:** the first push was rejected with *"refusing to allow a Personal Access Token to create or update workflow `.github/workflows/ci.yml` without `workflow` scope."* GitHub blocks any PAT from touching `.github/workflows/**` unless the token has the `workflow` scope specifically — `repo` alone is not enough. Fixed by regenerating the PAT with `repo` + `workflow` and clearing the cached credential from Windows Credential Manager. SSH auth sidesteps this entirely (keys have no scopes), if the token expiry ever gets annoying.
 - [x] Widen test coverage beyond `lib/ai/` — added `lib/ai/scoring.test.ts` (the real scoring fn lives in `lib/ai/scoring.ts`, not `lib/data/scoring.ts` as this note previously claimed) and `lib/data/stats.test.ts`. 45 tests total.
 - [x] Gitignore Office lock files — added `~$*` to `.gitignore`
-- [x] Keyboard accessibility for the brand switcher list — rows are now real `<button>`s inside each `<li>` (not `<li onClick>`), so they're tab-reachable and Enter/Space activatable natively with no ARIA. Added a `:focus-visible` ring and `aria-current` on the active brand. **Visual layout of this change is unverified** — the modal is auth-gated so I couldn't see it render; worth a glance next time you open the client switcher.
+- [x] Keyboard accessibility for the brand switcher list — rows are now real `<button>`s inside each `<li>` (not `<li onClick>`), so they're tab-reachable and Enter/Space activatable natively with no ARIA. Added a `:focus-visible` ring and `aria-current` on the active brand. **Visually verified 2026-08-01** — see below.
+
+#### How the modal was visually verified without auth (2026-08-01)
+The client switcher is auth-gated and the sandbox can't screenshot, so instead: copied the real `app/globals.css` verbatim into a scratch dir, rebuilt the exact modal DOM from `app/app/page.tsx:147-155` around it, served it over `http://localhost:4321` (a static `python -m http.server` entry in `.claude/launch.json`), and read computed styles + geometry out of the live page. No rules were hand-transcribed, so the measurements are of the shipped CSS.
+
+Results — correct in both themes:
+- Rows: 384px wide, 34px tall, 8px gap, no horizontal overflow; a 39-char name + 37-char domain wraps to 50px instead of overflowing.
+- Light: modal `#FFF`, inactive row `#F8FAFC` on `#0F172A` ink, active row `#E0F2FE` with `#0EA5E9` border/ink.
+- Dark: modal `#131B2E`, inactive row `#1A2440` on `#F1F5F9` ink, active row `rgba(14,165,233,.15)` with `#0EA5E9` border/ink.
+- Portal fix holds: with `.sidebar` pinned to `--soft:#1A2440`, the modal still resolves its own `--soft` from `:root` (`#F8FAFC` in light). This is the regression the `createPortal` fix exists to prevent.
+- Keyboard: tab order is close-X → row 1 → row 2 → row 3 → name → website → submit. All rows are natively focusable, `:focus-visible` matches, `aria-current="true"` only on the active row, and no `role` is set on any `<li>`.
+
+Gotcha for future runs: the in-app browser reports *stale* computed colors while `.client-list button`'s `transition:.15s` is in flight — it froze at the pre-toggle value for 3+ seconds and looked like a theming bug. Suppress with an injected `*{transition:none!important}`, or measure a freshly-created element. It's a quirk of that browser's computed-style serialization, not an app defect; the real modal mounts fresh in the current theme anyway. Same caveat for `outline` — it serializes the UA default over `:focus-visible`, so trust `el.matches(':focus-visible')` rather than the reported outline color.
 
 ### Medium-term
 - [ ] Competitor scan flow — scan competitors against the same prompts and compare
