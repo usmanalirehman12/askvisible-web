@@ -3,6 +3,8 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { runAndSaveScan } from "@/lib/data/scans";
 import { generateFixes, fixGeneratorConfigured } from "@/lib/ai/fix-generator";
 import { saveFixes } from "@/lib/data/fixes";
+import { emailConfigured, sendEmail } from "@/lib/email/send";
+import { getPreviousScore, scoreDropEmail, shouldAlertOnDrop } from "@/lib/email/alerts";
 
 // Node.js runtime — cron jobs need more than the 30s Edge cap.
 // maxDuration requires Vercel Pro (300s). On Hobby it defaults to 10s,
@@ -36,7 +38,28 @@ export async function GET(request: Request) {
   if (brandsErr) return NextResponse.json({ error: brandsErr.message }, { status: 500 });
   if (!brands?.length) return NextResponse.json({ ran: 0, results: [] });
 
-  const results: { brand: string; score?: number; mentions?: number; fixes?: number; skipped?: string; error?: string }[] = [];
+  const results: { brand: string; score?: number; mentions?: number; fixes?: number; alerted?: boolean; skipped?: string; error?: string }[] = [];
+
+  // Resolved once per run rather than per brand — most workspaces own several brands and
+  // the owner lookup is the same every time.
+  const ownerEmail = new Map<string, string | null>();
+  async function emailForWorkspace(workspaceId: string): Promise<string | null> {
+    if (ownerEmail.has(workspaceId)) return ownerEmail.get(workspaceId) ?? null;
+    let email: string | null = null;
+    try {
+      const { data: workspace } = await supabase.from("workspaces").select("owner_id").eq("id", workspaceId).maybeSingle();
+      // profiles has no email column, so the address lives in auth.users and needs the
+      // admin API — which is why this route uses the service client.
+      if (workspace?.owner_id) {
+        const { data: owner } = await supabase.auth.admin.getUserById(workspace.owner_id);
+        email = owner?.user?.email ?? null;
+      }
+    } catch (err) {
+      console.error("[cron] owner lookup failed:", err instanceof Error ? err.message : err);
+    }
+    ownerEmail.set(workspaceId, email);
+    return email;
+  }
 
   for (const brand of brands) {
     if (!shouldScanToday(brand)) {
@@ -60,8 +83,35 @@ export async function GET(request: Request) {
         }
       }
 
-      results.push({ brand: brand.name, score: scan.score, mentions: scan.mentions, fixes: fixesGenerated });
-      console.log(`[cron] ${brand.name}: score=${scan.score} mentions=${scan.mentions}/${scan.total} fixes=${fixesGenerated}`);
+      // Alerting is best-effort and deliberately last: the scan and its fixes are already
+      // saved by this point, so nothing here can cost us a completed scan.
+      let alerted = false;
+      if (emailConfigured()) {
+        try {
+          const previous = await getPreviousScore(supabase, brand.id, scan.scanRunId);
+          if (shouldAlertOnDrop(previous, scan.score)) {
+            const to = await emailForWorkspace(brand.workspace_id);
+            if (to) {
+              const result = await sendEmail(scoreDropEmail({
+                to,
+                brandName: brand.name,
+                previous: previous as number,
+                current: scan.score,
+                mentions: scan.mentions,
+                total: scan.total,
+                appUrl: process.env.NEXT_PUBLIC_APP_URL ? `${process.env.NEXT_PUBLIC_APP_URL}/app` : undefined
+              }));
+              alerted = result.sent;
+              if (result.error) console.error(`[cron] alert failed for ${brand.name}:`, result.error);
+            }
+          }
+        } catch (alertErr) {
+          console.error(`[cron] alerting failed for ${brand.name}:`, alertErr instanceof Error ? alertErr.message : alertErr);
+        }
+      }
+
+      results.push({ brand: brand.name, score: scan.score, mentions: scan.mentions, fixes: fixesGenerated, alerted });
+      console.log(`[cron] ${brand.name}: score=${scan.score} mentions=${scan.mentions}/${scan.total} fixes=${fixesGenerated} alerted=${alerted}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       results.push({ brand: brand.name, error: msg });

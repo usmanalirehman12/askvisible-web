@@ -15,23 +15,23 @@ weeks; "delete stale Vercel projects" is one row and five minutes. Read the size
 in the backlog before reading anything into the percentage.
 
 ```
-Product features    ████████████████████░░░░░░  12 / 15   80%
+Product features    ██████████████████████░░░░  13 / 15   87%
 Engineering health  ██████████████████████████   7 / 7    100%
 Known debt          ██████████████████████████   3 / 3    100%
 ────────────────────────────────────────────────────────────
-Overall             █████████████████████░░░░░  22 / 25    88%
+Overall             ██████████████████████░░░░  23 / 25    92%
 ```
 
 | Area | Done | Open |
 |---|---:|---:|
-| Product features | 12 | 3 |
+| Product features | 13 | 2 |
 | Engineering health | 7 | 0 |
 | Known debt | 3 | 0 |
-| **Total** | **22** | **3** |
+| **Total** | **23** | **2** |
 
-The three open items are all **blocked on you**, not on work: an email provider
-decision, a Stripe account, and the Vercel dashboard. Nothing is left that I can pick up
-unilaterally.
+Both open items need something only you can supply: a Stripe account with real pricing,
+and the Vercel dashboard. Team members is buildable now that the email provider is
+settled.
 
 ### Shipped — product
 
@@ -49,6 +49,7 @@ unilaterally.
 | 10 | SEO Audit | 12+ regex checks over fetched HTML, grouped by category |
 | 11 | Google Search Console | Full OAuth, token refresh, metrics + top queries |
 | 12 | Competitor share of voice | Competitors matched against the same answers, in the same scan |
+| 13 | Score-drop email alerts | Resend, fires on a 10+ point fall vs the previous scan |
 
 ### Shipped — engineering health
 
@@ -98,19 +99,24 @@ hook. Detail in `.claude/session_notes.md`.
 `competitor_mentions`, so the tab will say so and ask for a new run rather than showing
 everyone at 0%.
 
-### 4. Notifications tab — size M — **needs a decision from you**
+### ~~4. Score-drop email alerts~~ — DONE 2026-08-01
 
-Email alerts on score drops. The UI and the trigger logic are straightforward; the blocker
-is which delivery provider to use, and that decides the env vars, the cost and the
-deliverability story. Realistic options are Resend (simplest, generous free tier), Postmark
-(best deliverability, paid), or a Supabase edge function over SMTP (no new vendor, most
-setup). I have no basis for choosing on your behalf — it depends on volume and budget.
+Resend, chosen over the domain's own Fasthosts SMTP. Volume wasn't the deciding factor —
+both are far above a daily cron over a handful of brands. Blast radius was: a Resend key
+can only send, while a mailbox password can send as you and read your mail over IMAP, and
+it would live in a Vercel env var. Bounce and complaint webhooks were the tiebreaker.
 
-### 5. Team members tab — size M — **downstream of #4**
+**Not live until you set `RESEND_API_KEY` and `ALERT_FROM_EMAIL` in Vercel.** Until then
+`emailConfigured()` returns false and the cron skips alerting — nothing errors.
 
-Invite by email, roles. `workspace_members.role` and the RLS already support it, so this is
-mostly UI plus an invite flow — but the invite is an email, so it inherits whatever
-provider #4 settles on. Doing this first would mean building the invite twice.
+Setup: sign up at resend.com → add your domain → paste the DNS records into Fasthosts →
+create a send-only API key → add both env vars. The from-address must be on the verified
+domain or every send returns 403.
+
+### 5. Team members tab — size M — **buildable now**
+
+Invite by email, roles. `workspace_members.role` and the RLS already support it, and the
+email path now exists, so this is UI plus an invite-token flow. No longer blocked.
 
 ### 6. Billing & usage — size L — **needs your Stripe account and pricing**
 

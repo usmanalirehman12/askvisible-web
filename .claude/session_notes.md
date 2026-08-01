@@ -284,12 +284,32 @@ Gotcha for future runs: the in-app browser reports *stale* computed colors while
 > Ranked, with sizes and reasoning, in [`PLAN.md`](../PLAN.md#whats-next). Everything still open is blocked on a decision or an account only the founder can supply.
 
 - [x] **Competitor share of voice (2026-08-01)** — see below.
-- [ ] Notifications tab in Settings (email alerts for score drops) — blocked on picking a delivery provider (Resend / Postmark / Supabase edge function), not on UI.
-- [ ] Team members tab in Settings (invite by email, roles) — `workspace_members.role` and the RLS already support it; needs UI plus an invite flow. Downstream of the notifications decision, since the invite is an email — building it first means building the invite twice.
+- [x] **Score-drop email alerts (2026-08-01)** — see below.
+- [ ] Team members tab in Settings (invite by email, roles) — `workspace_members.role` and the RLS already support it, and the email path now exists, so this is UI plus an invite-token flow. No longer blocked.
 - [ ] Billing & usage tab (Stripe integration) — `workspaces.plan` and `usage_months` exist. Blocked on a Stripe account, real price points, and the over-quota policy (block / warn / bill overage), which shapes the schema.
 - [ ] Delete stale Vercel projects: `websitefixer`, `askvisible-web`, `askvisible-web-tghb` — dashboard only, keep `askvisible-web-mfu2`.
 
+#### Score-drop email alerts (shipped 2026-08-01)
+Cron sends the workspace owner an email when a brand's score falls 10+ points against the previous scan. **Not live until `RESEND_API_KEY` and `ALERT_FROM_EMAIL` are set in Vercel** — `emailConfigured()` is checked first, so until then the cron skips alerting and nothing errors.
+
+**Why Resend over the domain's own Fasthosts SMTP.** Volume wasn't the deciding factor: Fasthosts allows 1,000/day (50 per 10 min) and Resend 3,000/month (100/day), both far above a daily cron over a few brands. Two things decided it:
+- **Blast radius.** A Resend key can only send. A Fasthosts mailbox password can send *as you* and read your mail over IMAP — sitting in a Vercel env var, that's a much bigger prize if it leaks. If SMTP is ever revisited, use a dedicated `alerts@` mailbox, never the primary address.
+- **Failure visibility.** SMTP gives no bounce or complaint signal; a failing alert is silent forever. Resend has webhooks and 30-day logs.
+
+Resend also needs no runtime change (plain HTTPS works on Edge and Node), where SMTP needs a TCP socket and therefore Node only. `RESEND_API_KEY` was already sitting in `.env.example`, so this was the intended provider from the start.
+
+**A correction worth recording:** "Supabase edge function" was listed as a third provider option in an earlier version of these notes. That was wrong — Edge Functions are a place to run code (Deno on Supabase infra), not an email service. Supabase only sends email for *auth* flows, and even there tells you to plug in your own SMTP for production. It would still need Resend or SMTP behind it, plus a second deploy target and secrets store. The one case where it would genuinely be right is email triggered by a **database event** (Postgres trigger/webhook) rather than app code — not this, since the cron already is the trigger and already holds the data.
+
+Design points:
+- **`sendEmail` never throws.** It runs in the cron loop *after* the scan and its fixes are saved. An email problem must not turn a successful scan into a failed one, so it returns `{sent, error}` for the caller to log. Alerting is last in the loop for the same reason.
+- **Threshold is 10 points**, in `lib/email/alerts.ts`. Scores move a few points between scans from ordinary model variance; a lower threshold would train people to ignore the mail.
+- **`previous == null` means no alert.** A brand's first scan isn't a drop however low it lands. Note this is an explicit null check — `if (!previous)` would silently disable alerting for any brand recovering from a score of 0, and there's a test pinning that.
+- **Score isn't stored on `scan_runs`** (only confidence is), so `getPreviousScore` recomputes it from the previous run's answers. Two queries, once per brand per day.
+- **Recipient comes from `auth.users`** via the admin API — `profiles` has no email column. That's why the lookup needs the service client, and it's memoised per workspace since most workspaces own several brands.
+
 #### Competitor share of voice (shipped 2026-08-01)
+**Gap found and fixed the same day:** `runAndSaveScan` — the *scheduled* scan path — wasn't writing `competitor_mentions`, only the manual `/api/scan/prompt` path was. Share of voice would have populated from a button click and stayed permanently empty for cron-driven brands. Both paths write it now. Worth remembering that this codebase has two scan paths and a change to one usually needs the other.
+
 The `answers` table already had an unused `competitor_mentions jsonb` column — the schema anticipated this feature and nothing had ever written to it. Competitors are now matched against the **same answer text** the brand is scored on, inside the same scan.
 
 **Why not scan competitors separately.** It would multiply the provider fan-out by the number of competitors and still answer the wrong question. What matters isn't "how does Rival score on Rival's prompts", it's "when someone asks *our* question, who gets named". One answer, one matcher, one comparison — cheaper and more honest.
