@@ -15,23 +15,22 @@ weeks; "delete stale Vercel projects" is one row and five minutes. Read the size
 in the backlog before reading anything into the percentage.
 
 ```
-Product features    ██████████████████████░░░░  13 / 15   87%
+Product features    ████████████████████████░░  14 / 16   88%
 Engineering health  ██████████████████████████   7 / 7    100%
 Known debt          ██████████████████████████   3 / 3    100%
 ────────────────────────────────────────────────────────────
-Overall             ██████████████████████░░░░  23 / 25    92%
+Overall             ████████████████████████░░  24 / 26    92%
 ```
 
 | Area | Done | Open |
 |---|---:|---:|
-| Product features | 13 | 2 |
+| Product features | 14 | 2 |
 | Engineering health | 7 | 0 |
 | Known debt | 3 | 0 |
-| **Total** | **23** | **2** |
+| **Total** | **24** | **2** |
 
-Both open items need something only you can supply: a Stripe account with real pricing,
-and the Vercel dashboard. Team members is buildable now that the email provider is
-settled.
+The denominator grew by one: shipping team invites surfaced **multi-workspace switching**
+as a real, separable piece of work rather than a hypothetical. See below.
 
 ### Shipped — product
 
@@ -50,6 +49,7 @@ settled.
 | 11 | Google Search Console | Full OAuth, token refresh, metrics + top queries |
 | 12 | Competitor share of voice | Competitors matched against the same answers, in the same scan |
 | 13 | Score-drop email alerts | Resend, fires on a 10+ point fall vs the previous scan |
+| 14 | Team members | Invite by email with roles, accept flow, revoke and remove |
 
 ### Shipped — engineering health
 
@@ -113,10 +113,22 @@ Setup: sign up at resend.com → add your domain → paste the DNS records into 
 create a send-only API key → add both env vars. The from-address must be on the verified
 domain or every send returns 403.
 
-### 5. Team members tab — size M — **buildable now**
+### ~~5. Team members tab~~ — DONE 2026-08-01
 
-Invite by email, roles. `workspace_members.role` and the RLS already support it, and the
-email path now exists, so this is UI plus an invite-token flow. No longer blocked.
+Invite by email with a role, accept flow, revoke, remove, leave. Permission rules are pure
+functions in `lib/data/team.ts` with 23 tests. Needs the migration below.
+
+### 5b. Multi-workspace switching — size M — **new, surfaced by the invite work**
+
+Someone who belongs to two workspaces can only see one. `getWorkspaceContext` picks a
+single membership, so an invited user would have landed in the empty workspace their
+signup created and the invite would have looked broken. The stopgap is ordering by
+`joined_at` descending, which makes the just-accepted workspace win — good enough for the
+common case (new person invited to a team), not good enough for anyone genuinely in two.
+
+This was always noted as "deferred scope"; shipping invites turned it into something with
+a real user behind it. The fix is a workspace switcher mirroring the existing brand
+switcher, plus returning all memberships from `getWorkspaceContext`.
 
 ### 6. Billing & usage — size L — **needs your Stripe account and pricing**
 

@@ -391,6 +391,17 @@ td .up,td .down{display:flex;align-items:center}td svg{width:12px}
 .share-bars i{height:8px;background:var(--line);border-radius:9px}
 .share-bars i b{display:block;background:var(--sky);height:100%;border-radius:9px}
 .muted-note{color:var(--muted);font-size:12px;line-height:1.6;margin:10px 0 0}
+.team-list{display:grid;gap:8px}
+.team-list>div{display:grid;grid-template-columns:34px 1fr auto auto;gap:12px;align-items:center;padding:10px 12px;background:var(--soft);border:1px solid transparent;border-radius:8px;font-size:13px}
+.team-list>div.pending{border-style:dashed;border-color:var(--line2)}
+.team-list>div>span{width:34px;height:34px;border-radius:8px;background:var(--sky-d);color:var(--sky);display:grid;place-items:center;font-size:11px;font-weight:700}
+.team-list b,.team-list small{display:block}
+.team-list b{font-size:13px;color:var(--ink)}
+.team-list small{color:var(--muted);font-size:11px;margin-top:2px}
+.team-list em{font-style:normal;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.team-list>div>button{background:transparent;border:1px solid var(--line2);color:var(--muted);border-radius:7px;padding:5px 11px;font-size:12px}
+.team-list>div>button:hover{border-color:var(--cr);color:var(--cr)}
+.settings-form select{border:1px solid var(--line2);border-radius:7px;padding:11px;outline:0;font-size:14px;background:var(--surface);color:var(--ink)}
 
 /* Overview & Fixes sub-tabs */
 .overview-tabs{display:flex;gap:3px;margin-bottom:16px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:4px}

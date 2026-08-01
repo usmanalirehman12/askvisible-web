@@ -285,9 +285,56 @@ Gotcha for future runs: the in-app browser reports *stale* computed colors while
 
 - [x] **Competitor share of voice (2026-08-01)** — see below.
 - [x] **Score-drop email alerts (2026-08-01)** — see below.
-- [ ] Team members tab in Settings (invite by email, roles) — `workspace_members.role` and the RLS already support it, and the email path now exists, so this is UI plus an invite-token flow. No longer blocked.
+- [x] **Team members (2026-08-01)** — see below. **Needs a migration run in Supabase.**
+- [ ] Multi-workspace switching — surfaced as real work by the invite flow, see below.
 - [ ] Billing & usage tab (Stripe integration) — `workspaces.plan` and `usage_months` exist. Blocked on a Stripe account, real price points, and the over-quota policy (block / warn / bill overage), which shapes the schema.
 - [ ] Delete stale Vercel projects: `websitefixer`, `askvisible-web`, `askvisible-web-tghb` — dashboard only, keep `askvisible-web-mfu2`.
+
+#### Team members (shipped 2026-08-01)
+
+**RUN THIS MIGRATION** — the app expects these and the Team tab errors without them. Safe to re-run:
+
+```sql
+alter table public.workspace_members add column if not exists joined_at timestamptz not null default now();
+
+create table if not exists public.invitations (
+  id uuid primary key default uuid_generate_v4(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  email text not null,
+  role text not null default 'member' check (role in ('admin','member','viewer')),
+  token text not null unique,
+  invited_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '7 days',
+  accepted_at timestamptz,
+  constraint invitations_email_lower check (email = lower(email))
+);
+create unique index if not exists invitations_pending_unique on public.invitations (workspace_id, email) where accepted_at is null;
+create index if not exists invitations_token_idx on public.invitations (token);
+alter table public.invitations enable row level security;
+
+drop policy if exists "members read teammates" on public.workspace_members;
+create policy "members read teammates" on public.workspace_members for select using (public.is_workspace_member(workspace_id));
+```
+
+**The team list was invisible to its own members.** `workspace_members` only had a "read own membership rows" policy, so nobody could see teammates. The new policy uses `is_workspace_member()`, which is `security definer` and therefore bypasses RLS — that's what stops a policy on `workspace_members` recursing into `workspace_members`.
+
+**Invitations are service-role only.** RLS on, zero policies. The token is the only credential a link-clicker presents, so it's 64 hex chars from two `randomUUID()`s and expires in 7 days. Every read goes through `/api/team`, which checks the caller's role first using their *session* client — the service role is only reached after that gate.
+
+**Permission rules are pure functions** in `lib/data/team.ts`, tested rather than buried in a route handler:
+- The owner can never be removed, by anyone including themselves. `workspaces.owner_id` points at them, so removal would orphan the workspace and surface as an opaque FK error.
+- Anyone can remove themselves; only owner/admin can remove others.
+- Only the owner can remove an admin — admin-removes-admin is a privilege fight with no tiebreaker.
+- `owner` isn't grantable at all. There's exactly one, created by `handle_new_user`.
+
+**The accept flow had a gap that would have made invites look broken.** `getWorkspaceContext` picks a *single* membership, so an invited user would have landed in the empty workspace their own signup created, seen nothing, and concluded the invite failed. Membership selection now orders by `joined_at desc` so the just-accepted workspace wins. That's a stopgap — see the next section.
+
+`/invite/[token]` handles unknown token, already used, expired, signed out (routes through `/signup?invite=…` and back), and **signed in as a different address than the invite names** — that last one would otherwise silently add the wrong person. Membership is inserted *before* the invite is marked accepted, so a failure leaves it reusable rather than burning the token.
+
+The invite URL is returned from the API even when the email send fails. An invitation the inviter can't see is worse than one they paste into Slack themselves.
+
+#### Multi-workspace switching (open — surfaced 2026-08-01)
+Always noted as deferred; the invite flow gave it a real user. Someone in two workspaces can only ever see one, because `getWorkspaceContext` takes a single membership row. The `joined_at desc` ordering makes the common case work (new person invited to a team) but not the genuine one (a contractor in two agencies). Fix is a workspace switcher mirroring the existing brand switcher, plus returning all memberships from `getWorkspaceContext`.
 
 #### Score-drop email alerts (shipped 2026-08-01)
 Cron sends the workspace owner an email when a brand's score falls 10+ points against the previous scan. **Not live until `RESEND_API_KEY` and `ALERT_FROM_EMAIL` are set in Vercel** — `emailConfigured()` is checked first, so until then the cron skips alerting and nothing errors.

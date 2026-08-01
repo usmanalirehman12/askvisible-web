@@ -11,7 +11,11 @@ export async function getWorkspaceContext(supabase: SupabaseClient): Promise<Wor
 
   const [{ data: profile }, { data: membership }] = await Promise.all([
     supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
-    supabase.from("workspace_members").select("workspace_id").eq("user_id", user.id).limit(1).maybeSingle()
+    // Newest membership first. Someone who accepts an invite has just joined that
+    // workspace, so it wins over the empty one handle_new_user made them at signup —
+    // without this the invite flow appears to do nothing. Once workspace switching exists
+    // this ordering stops mattering.
+    supabase.from("workspace_members").select("workspace_id").eq("user_id", user.id).order("joined_at", { ascending: false }).limit(1).maybeSingle()
   ]);
   if (!membership) return null;
 

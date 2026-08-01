@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Activity, AlertCircle, ArrowDownRight, ArrowLeft, ArrowUpRight, BarChart3, Bell, Check, ChevronDown, CircleHelp, Edit2, FileText, Gauge, Globe, LayoutDashboard, Link2, LoaderCircle, LogOut, Menu, Moon, MoreHorizontal, Play, Plus, Radar, Search, Settings, Sparkles, Sun, Target, Trash2, TrendingUp, Users, WandSparkles, X } from "lucide-react";
+import { Activity, AlertCircle, ArrowDownRight, ArrowLeft, ArrowUpRight, BarChart3, Bell, Check, ChevronDown, CircleHelp, Edit2, FileText, Gauge, Globe, LayoutDashboard, Link2, LoaderCircle, LogOut, Mail, Menu, Moon, MoreHorizontal, Play, Plus, Radar, Search, Settings, Sparkles, Sun, Target, Trash2, TrendingUp, Users, WandSparkles, X } from "lucide-react";
 import { supabaseConfigured } from "@/lib/supabase/config";
 import type { Brand, Competitor, Fix, Prompt, WorkspaceContext } from "@/lib/data/types";
 import type { ScanAnswerRow, ShareOfVoiceRow } from "@/lib/data/stats";
@@ -847,7 +847,7 @@ function SettingsPage({demo,brand,ctx,onBrandUpdated}:{demo:boolean;brand?:Brand
     <button className={tab==="brand"?"active":""} onClick={()=>setTab("brand")}><Target/>Brand profile</button>
     <button className={tab==="integrations"?"active":""} onClick={()=>setTab("integrations")}><Link2/>Integrations</button>
     <button><Bell/>Notifications</button>
-    <button><Users/>Team members</button>
+    <button className={tab==="team"?"active":""} onClick={()=>setTab("team")}><Users/>Team members</button>
     <button><BarChart3/>Billing &amp; usage</button>
    </article>
    <article className="panel settings-form">
@@ -896,8 +896,88 @@ function SettingsPage({demo,brand,ctx,onBrandUpdated}:{demo:boolean;brand?:Brand
       </div>
      </div>
     </>}
+    {tab==="team"&&<TeamSettings demo={demo}/>}
    </article>
   </div></>;
+}
+
+type TeamMember={userId:string;name:string|null;email:string|null;role:string;isYou:boolean};
+type TeamInvite={id:string;email:string;role:string;expires_at:string};
+
+function TeamSettings({demo}:{demo:boolean}){
+ const [role,setRole]=useState<string|null>(null);
+ const [members,setMembers]=useState<TeamMember[]>([]);
+ const [invites,setInvites]=useState<TeamInvite[]>([]);
+ const [loading,setLoading]=useState(!demo);
+ const [email,setEmail]=useState(""),[inviteRole,setInviteRole]=useState("member");
+ const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
+
+ async function load(){
+  const r=await fetch("/api/team");const d=await r.json().catch(()=>({}));
+  if(r.ok){setRole(d.role);setMembers(d.members||[]);setInvites(d.invitations||[])}
+  else setError(d.error||"Couldn't load the team.");
+  setLoading(false);
+ }
+ useEffect(()=>{if(demo){setLoading(false);return}load()},[demo]);
+
+ const canManage=role==="owner"||role==="admin";
+
+ async function invite(e:React.FormEvent){
+  e.preventDefault();setBusy(true);setError("");setNotice("");
+  const r=await fetch("/api/team",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,role:inviteRole})});
+  const d=await r.json().catch(()=>({}));
+  setBusy(false);
+  if(!r.ok){setError(d.error||"Couldn't send that invitation.");return}
+  setEmail("");
+  // The link is always returned, so a failed send is recoverable by pasting it manually
+  // rather than leaving an invite the inviter can't see.
+  setNotice(d.warning?`${d.warning} ${d.url}`:`Invitation sent to ${d.invitation.email}.`);
+  load();
+ }
+
+ async function remove(body:Record<string,string>,confirmText:string){
+  if(!window.confirm(confirmText))return;
+  setError("");setNotice("");
+  const r=await fetch("/api/team",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){setError(d.error||"That didn't work.");return}
+  load();
+ }
+
+ if(demo)return <><h3>Team members</h3><p style={{marginBottom:"20px"}}>Invite the rest of your agency. Owners and admins can add people; everyone else has read access.</p><p className="muted-note">Team management is disabled in demo mode.</p></>;
+ if(loading)return <><h3>Team members</h3><p>Loading team…</p></>;
+
+ return <>
+  <h3>Team members</h3>
+  <p style={{marginBottom:"20px"}}>Owners and admins can invite and remove people. Members and viewers have read access to everything the workspace tracks.</p>
+  {error&&<div className="checker-error"><AlertCircle/><div><b>Something went wrong</b><p>{error}</p></div></div>}
+  {notice&&<p className="muted-note">{notice}</p>}
+
+  <div className="team-list">
+   {members.map(m=><div key={m.userId}>
+    <span>{(m.name||m.email||"?").slice(0,2).toUpperCase()}</span>
+    <div><b>{m.name||m.email||"Unknown"}{m.isYou?" (you)":""}</b><small>{m.email||"No email on file"}</small></div>
+    <em>{m.role}</em>
+    {(canManage||m.isYou)&&m.role!=="owner"&&<button onClick={()=>remove({userId:m.userId},m.isYou?"Leave this workspace?":`Remove ${m.name||m.email} from the team?`)}>{m.isYou?"Leave":"Remove"}</button>}
+   </div>)}
+   {invites.map(i=><div key={i.id} className="pending">
+    <span><Mail size={15}/></span>
+    <div><b>{i.email}</b><small>Invited · expires {new Date(i.expires_at).toLocaleDateString()}</small></div>
+    <em>{i.role}</em>
+    {canManage&&<button onClick={()=>remove({invitationId:i.id},`Revoke the invitation for ${i.email}?`)}>Revoke</button>}
+   </div>)}
+  </div>
+
+  {canManage&&<form onSubmit={invite} style={{marginTop:"22px"}}>
+   <label>Invite by email<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="colleague@youragency.com"/></label>
+   <label>Role<select value={inviteRole} onChange={e=>setInviteRole(e.target.value)}>
+    <option value="admin">Admin — can invite and remove people</option>
+    <option value="member">Member — full access, no team management</option>
+    <option value="viewer">Viewer — read only</option>
+   </select></label>
+   <button className="button" disabled={busy}>{busy?"Sending…":"Send invitation"}</button>
+  </form>}
+ </>;
 }
 
 function GscSettingsStatus({demo,brandId}:{demo:boolean;brandId?:string}){

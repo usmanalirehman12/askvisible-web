@@ -1,14 +1,24 @@
 "use client";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { AlertCircle, ArrowRight, Sparkles } from "lucide-react";
 import { supabaseConfigured } from "@/lib/supabase/config";
 
+// useSearchParams needs a Suspense boundary above it or the build fails on this route.
 export default function SignupPage() {
-  const router = useRouter();
+  return <Suspense fallback={<main className="auth-shell" />}><SignupForm /></Suspense>;
+}
+
+function SignupForm() {
+  const params = useSearchParams();
+  // Set when arriving from /invite/[token]. Signing up creates this user's own workspace
+  // via handle_new_user; returning to the invite page is what joins them to the one they
+  // were actually invited to.
+  const inviteToken = params.get("invite");
+  const nextUrl = inviteToken ? `/invite/${inviteToken}` : "/app";
   const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(params.get("email") || "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -29,7 +39,7 @@ export default function SignupPage() {
         options: { data: { full_name: fullName } }
       });
       if (signUpError) throw signUpError;
-      if (data.session) { window.location.href = "/app"; return; }
+      if (data.session) { window.location.href = nextUrl; return; }
       setConfirmSent(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign up failed.");
@@ -39,7 +49,7 @@ export default function SignupPage() {
   }
 
   if (confirmSent) {
-    return <main className="auth-shell"><div className="modal"><span className="feature-icon"><Sparkles /></span><h2>Check your email</h2><p>We sent a confirmation link to <b>{email}</b>. Click it to activate your account, then <Link href="/login">sign in</Link>.</p></div></main>;
+    return <main className="auth-shell"><div className="modal"><span className="feature-icon"><Sparkles /></span><h2>Check your email</h2><p>We sent a confirmation link to <b>{email}</b>. Click it to activate your account, then <Link href="/login">sign in</Link>.</p>{inviteToken && <p>Once you&apos;re in, <Link href={nextUrl}>open your invitation</Link> to join the team.</p>}</div></main>;
   }
 
   return <main className="auth-shell">

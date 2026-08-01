@@ -23,12 +23,39 @@ create table public.workspaces (
   prompt_quota integer not null default 3,
   created_at timestamptz not null default now()
 );
+-- joined_at exists so getWorkspaceContext can order deterministically. It picks a single
+-- membership (multi-workspace switching is still deferred), and ordering newest-first means
+-- someone who accepts an invite lands in the workspace they were just invited to rather
+-- than the empty one handle_new_user made for them at signup.
 create table public.workspace_members (
   workspace_id uuid references public.workspaces(id) on delete cascade,
   user_id uuid references public.profiles(id) on delete cascade,
   role text not null default 'member' check (role in ('owner','admin','member','viewer')),
+  joined_at timestamptz not null default now(),
   primary key(workspace_id,user_id)
 );
+
+-- Invitations are consumed by an unauthenticated visitor clicking a link, so the token is
+-- the only credential — it must be unguessable and it expires. Nothing here is readable by
+-- anon or authenticated clients (RLS on, zero policies); every read goes through the
+-- service role in /api/team/*, which checks the caller's role first.
+create table public.invitations (
+  id uuid primary key default uuid_generate_v4(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  email text not null,
+  role text not null default 'member' check (role in ('admin','member','viewer')),
+  token text not null unique,
+  invited_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '7 days',
+  accepted_at timestamptz,
+  -- One live invite per email per workspace. Re-inviting replaces rather than piles up,
+  -- and a partial index lets an accepted invite sit alongside a fresh one for the same
+  -- person if they're ever removed and re-added.
+  constraint invitations_email_lower check (email = lower(email))
+);
+create unique index invitations_pending_unique on public.invitations (workspace_id, email) where accepted_at is null;
+create index invitations_token_idx on public.invitations (token);
 -- scan_frequency/scan_day drive the daily cron in app/api/cron/scan/route.ts. They were
 -- added to production by a manual migration and were missing from this file until
 -- 2026-08-01 — a schema rebuild from source would have silently broken the scheduler.
@@ -185,7 +212,14 @@ create policy "members manage gsc_tokens" on public.gsc_tokens for all using (pu
 -- wiring to work at all, not an optional hardening pass.
 create policy "users read own profile" on public.profiles for select using (id = auth.uid());
 create policy "users update own profile" on public.profiles for update using (id = auth.uid());
+-- Reading your own row is what getWorkspaceContext needs; reading the whole team is what
+-- the Team members tab needs. is_workspace_member is security definer, so it bypasses RLS
+-- and this policy can't recurse into itself.
 create policy "members read own membership rows" on public.workspace_members for select using (user_id = auth.uid());
+create policy "members read teammates" on public.workspace_members for select using (public.is_workspace_member(workspace_id));
+
+alter table public.invitations enable row level security;
+-- Deliberately no policies: invitations carry a bearer token, so they're service-role only.
 create policy "members read competitors" on public.competitors for select using (exists(select 1 from public.brands b where b.id = competitors.brand_id and public.is_workspace_member(b.workspace_id)));
 create policy "members manage competitors" on public.competitors for all using (exists(select 1 from public.brands b where b.id = competitors.brand_id and public.is_workspace_member(b.workspace_id))) with check (exists(select 1 from public.brands b where b.id = competitors.brand_id and public.is_workspace_member(b.workspace_id)));
 
