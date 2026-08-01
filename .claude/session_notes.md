@@ -185,8 +185,30 @@ Added the missing SELECT policy in Supabase, switched `useFixes`/`Fixes` in `app
 ### 4. ~~Prompts tab has no edit UI~~ — was already built, this note was stale
 Add/edit/delete all work via `/api/prompts`; nothing needed fixing.
 
-### 5. `scan_frequency` and `scan_day` not in schema.sql
-These columns were added to the `brands` table via a previous migration but are not reflected in `supabase/schema.sql`. If the schema is ever reset, those columns would be missing.
+### 5. ~~`scan_frequency` and `scan_day` not in schema.sql~~ — RESOLVED 2026-08-01
+Both columns are now declared on `public.brands` with defaults matching the code's fallbacks (`'weekly'`, `1`) and check constraints. A schema rebuild from source no longer silently kills the scan scheduler.
+
+Two things came out of this that are worth keeping:
+
+- **`scan_day` had no validation anywhere.** `PATCH /api/brands/settings` validated the frequency but accepted any number for the day, so `scan_day: 999` stored cleanly and the cron then never matched it — the brand's scans just stopped, with no error in any log. The rule now lives in `lib/data/scan-schedule.ts` (0–6 weekly, 1–31 monthly, 0–31 when the frequency isn't part of a partial update) and returns a 400. `lib/data/types.ts` sources its frequency union from the same module so the type can't drift from the validator.
+- **The DB check is deliberately looser than the app check.** One column serves both modes, so Postgres can only enforce `between 0 and 31` without a conditional constraint that would reject existing rows. The per-frequency rule is app-level on purpose — a constraint violation surfaces as a 500, a validator returns a clean 400.
+
+**Optional, to make the live database match `schema.sql` exactly.** Production already has these columns so nothing here is required for the app to keep working — this only matters if you want a future rebuild to be byte-identical to what's live. Safe to re-run:
+
+```sql
+alter table public.brands alter column scan_frequency set default 'weekly';
+alter table public.brands alter column scan_day set default 1;
+update public.brands set scan_frequency = 'weekly' where scan_frequency is null;
+update public.brands set scan_day = 1 where scan_day is null;
+alter table public.brands alter column scan_frequency set not null;
+alter table public.brands alter column scan_day set not null;
+alter table public.brands drop constraint if exists brands_scan_frequency_check;
+alter table public.brands add constraint brands_scan_frequency_check check (scan_frequency in ('weekly','monthly','off'));
+alter table public.brands drop constraint if exists brands_scan_day_check;
+alter table public.brands add constraint brands_scan_day_check check (scan_day between 0 and 31);
+```
+
+Run the two `update` lines before the `set not null` lines or they'll fail on existing null rows. If the last `add constraint` errors, you have rows with an out-of-range `scan_day` — find them with `select id, name, scan_day from public.brands where scan_day not between 0 and 31;` and fix before retrying.
 
 ### 6. GSC migration must be run manually
 The `gsc_tokens` table + RLS policy must be run in Supabase SQL Editor. The SQL is in `supabase/schema.sql` but not auto-applied.

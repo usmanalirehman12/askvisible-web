@@ -29,6 +29,15 @@ create table public.workspace_members (
   role text not null default 'member' check (role in ('owner','admin','member','viewer')),
   primary key(workspace_id,user_id)
 );
+-- scan_frequency/scan_day drive the daily cron in app/api/cron/scan/route.ts. They were
+-- added to production by a manual migration and were missing from this file until
+-- 2026-08-01 — a schema rebuild from source would have silently broken the scheduler.
+-- Defaults match the code's fallbacks (`?? "weekly"`, `?? 1`), so a row written without
+-- them behaves identically whether the default comes from Postgres or from TypeScript.
+-- scan_day means day-of-week 0-6 when weekly and day-of-month 1-31 when monthly; the
+-- check stays permissive across both because one column serves both modes. The tighter
+-- per-frequency rule is enforced in lib/data/scan-schedule.ts so users get a 400 rather
+-- than a constraint violation.
 create table public.brands (
   id uuid primary key default uuid_generate_v4(),
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
@@ -36,6 +45,8 @@ create table public.brands (
   domain text not null,
   description text,
   aliases text[] not null default '{}',
+  scan_frequency text not null default 'weekly' check (scan_frequency in ('weekly','monthly','off')),
+  scan_day integer not null default 1 check (scan_day between 0 and 31),
   created_at timestamptz not null default now()
 );
 create table public.competitors (

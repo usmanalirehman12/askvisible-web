@@ -4,7 +4,7 @@ Working plan for the product. Detailed history, architectural decisions and debu
 notes live in [`.claude/session_notes.md`](.claude/session_notes.md); this file is the
 short version: what's done, what's next, and why.
 
-Last updated: 2026-08-01 (`208a368`)
+Last updated: 2026-08-01 (step 1 of the backlog complete)
 
 ---
 
@@ -16,18 +16,18 @@ in the backlog before reading anything into the percentage.
 
 ```
 Product features    ███████████████████░░░░░░░  11 / 15   73%
-Engineering health  ██████████████████████████   6 / 6    100%
-Known debt          ████████████░░░░░░░░░░░░░░   2 / 3     67%
+Engineering health  ██████████████████████████   7 / 7    100%
+Known debt          ██████████████████████████   3 / 3    100%
 ────────────────────────────────────────────────────────────
-Overall             ███████████████████░░░░░░░  19 / 24    79%
+Overall             ████████████████████░░░░░░  21 / 25    84%
 ```
 
 | Area | Done | Open |
 |---|---:|---:|
 | Product features | 11 | 4 |
-| Engineering health | 6 | 0 |
-| Known debt | 2 | 1 |
-| **Total** | **19** | **5** |
+| Engineering health | 7 | 0 |
+| Known debt | 3 | 0 |
+| **Total** | **21** | **4** |
 
 ### Shipped — product
 
@@ -55,6 +55,7 @@ Overall             ███████████████████░
 | 4 | Rate limiting | Postgres-backed, survives serverless scale-out, fails closed |
 | 5 | Keyboard accessibility | Brand switcher rows are real `<button>`s, verified in both themes |
 | 6 | Deploy discipline | Documented: production comes from git, never `vercel --prod` on a dirty tree |
+| 7 | Schema matches code | `scan_frequency`/`scan_day` declared; `scan_day` validated instead of silently killing the cron |
 
 ---
 
@@ -62,19 +63,20 @@ Overall             ███████████████████░
 
 Ranked. Do them in this order unless something external changes the priority.
 
-### 1. Close the `schema.sql` drift — size XS, ~15 min
+### ~~1. Close the `schema.sql` drift~~ — DONE 2026-08-01
 
-`scan_frequency` and `scan_day` are read and written by four files
-(`lib/data/types.ts`, `app/app/page.tsx`, `app/api/brands/settings/route.ts`,
-`app/api/cron/scan/route.ts`) but are **not declared in `supabase/schema.sql`**. They were
-added by a manual migration that never made it back into the file. Rebuild the schema from
-source today and the scan scheduler breaks silently.
+Both columns are declared with defaults matching the code's fallbacks. Turned up a
+second bug on the way in: `scan_day` was never validated, so `999` stored fine and the
+cron then silently stopped scanning that brand. Rule now lives in
+`lib/data/scan-schedule.ts` with 17 tests. Detail and the optional
+make-live-match-the-file `ALTER` block are in `.claude/session_notes.md` under Known Bug #5.
 
-Cheapest item on the list and the only one that is a live correctness risk rather than a
-missing feature. Same failure class as the rate-limit migration, which is now in the file
-correctly — worth fixing while the context is fresh.
+### 2. Delete the stale Vercel projects — size XS, ~5 min — **needs you**
 
-### 2. Delete the stale Vercel projects — size XS, ~5 min
+I can't do this one: no Vercel CLI here, and deleting projects is destructive on your
+account. Dashboard → each project → Settings → scroll to bottom → Delete Project.
+Delete `websitefixer`, `askvisible-web`, `askvisible-web-tghb`. Keep
+**`askvisible-web-mfu2`** — that's production.
 
 `websitefixer`, `askvisible-web`, `askvisible-web-tghb`. Only `askvisible-web-mfu2` is
 live. Three dead projects pointing at the same repo is exactly the confusion that already

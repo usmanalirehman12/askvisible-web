@@ -1,3 +1,5 @@
+import type { ScanFrequency } from "./scan-schedule";
+
 export type Brand = {
   id: string;
   workspace_id: string;
@@ -5,7 +7,8 @@ export type Brand = {
   domain: string;
   description: string | null;
   created_at: string;
-  scan_frequency?: "weekly" | "monthly" | "off";
+  // Sourced from scan-schedule so the union can't drift from the validator that enforces it.
+  scan_frequency?: ScanFrequency;
   scan_day?: number;
 };
 

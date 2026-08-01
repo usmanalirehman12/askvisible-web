@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { validateSchedule } from "@/lib/data/scan-schedule";
 
 export async function PATCH(request: Request) {
   const supabase = await createClient();
@@ -11,9 +12,10 @@ export async function PATCH(request: Request) {
 
   if (!brandId) return NextResponse.json({ error: "brandId required" }, { status: 400 });
 
-  const validFrequencies = ["weekly", "monthly", "off"];
-  if (scan_frequency && !validFrequencies.includes(scan_frequency))
-    return NextResponse.json({ error: "Invalid frequency" }, { status: 400 });
+  // scan_day was previously unvalidated, so a value like 999 stored fine and the cron
+  // then never matched it — the scan silently stopped running with no error anywhere.
+  const scheduleError = validateSchedule(scan_frequency, scan_day);
+  if (scheduleError) return NextResponse.json({ error: scheduleError }, { status: 400 });
 
   if (name !== undefined && !name.trim()) return NextResponse.json({ error: "Brand name is required" }, { status: 400 });
   if (domain !== undefined && !domain.trim()) return NextResponse.json({ error: "Website is required" }, { status: 400 });
