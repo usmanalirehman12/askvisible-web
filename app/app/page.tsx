@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Activity, AlertCircle, ArrowDownRight, ArrowLeft, ArrowUpRight, BarChart3, Bell, Check, ChevronDown, CircleHelp, Edit2, FileText, Gauge, Globe, LayoutDashboard, Link2, LoaderCircle, LogOut, Menu, Moon, MoreHorizontal, Play, Plus, Radar, Search, Settings, Sparkles, Sun, Target, Trash2, TrendingUp, Users, WandSparkles, X } from "lucide-react";
 import { supabaseConfigured } from "@/lib/supabase/config";
 import type { Brand, Competitor, Fix, Prompt, WorkspaceContext } from "@/lib/data/types";
-import type { ScanAnswerRow } from "@/lib/data/stats";
+import type { ScanAnswerRow, ShareOfVoiceRow } from "@/lib/data/stats";
 import { summarizeScan } from "@/lib/data/stats";
 
 const engines=[{name:"ChatGPT",short:"G",color:"green"},{name:"Gemini",short:"◆",color:"blue"},{name:"Perplexity",short:"P",color:"teal"},{name:"Claude",short:"C",color:"orange"},{name:"DeepSeek",short:"D",color:"crimson"},{name:"AI Overviews",short:"◈",color:"cobalt"}];
@@ -73,12 +73,12 @@ export default function AppPage(){
    const startRes=await fetch("/api/scan/start",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({brandId:activeBrand.id})});
    const startData=await startRes.json();
    if(!startRes.ok)throw new Error(startData.error||"Scan failed.");
-   const {scanRunId,brand,tasks}=startData;
+   const {scanRunId,brand,tasks,competitors}=startData;
    setScanProgress({done:0,total:tasks.length});
    let done=0;const skipped:{provider:string;reason:string}[]=[];
    await Promise.all(tasks.map(async(task:{provider:string;prompt:string;promptId:string})=>{
     try{
-     const r=await fetch("/api/scan/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scanRunId,provider:task.provider,prompt:task.prompt,promptId:task.promptId,brandName:brand.name,brandDomain:brand.domain})});
+     const r=await fetch("/api/scan/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scanRunId,provider:task.provider,prompt:task.prompt,promptId:task.promptId,brandName:brand.name,brandDomain:brand.domain,competitors})});
      const d=await r.json().catch(()=>({}));
      if(d.skipped&&!skipped.find(s=>s.provider===task.provider))skipped.push({provider:task.provider,reason:d.reason||"provider failed"});
     }catch{}
@@ -653,6 +653,8 @@ function SeoAuditResults({audit,onRerun}:{audit:SeoAuditResult;onRerun?:()=>void
 // would be worse than not showing the panel at all. It comes back once scan data is real.
 function Competitors({demo,brand}:{demo:boolean;brand?:Brand}){
  const [items,setItems]=useState<Competitor[]>([]);
+ const [sov,setSov]=useState<ShareOfVoiceRow[]>([]);
+ const [scanned,setScanned]=useState(false);
  const [loading,setLoading]=useState(!demo);
  const [modal,setModal]=useState(false),[name,setName]=useState(""),[domain,setDomain]=useState(""),[saving,setSaving]=useState(false),[error,setError]=useState("");
 
@@ -661,10 +663,15 @@ function Competitors({demo,brand}:{demo:boolean;brand?:Brand}){
   let cancelled=false;
   (async()=>{
    setLoading(true);
-   const [{createClient},{getCompetitors}]=await Promise.all([import("@/lib/supabase/client"),import("@/lib/data/competitors")]);
+   const [{createClient},{getCompetitors},{getLatestScan,shareOfVoice}]=await Promise.all([import("@/lib/supabase/client"),import("@/lib/data/competitors"),import("@/lib/data/stats")]);
    const supabase=createClient();
-   const rows=await getCompetitors(supabase,brand.id);
-   if(!cancelled){setItems(rows);setLoading(false)}
+   const [rows,scan]=await Promise.all([getCompetitors(supabase,brand.id),getLatestScan(supabase,brand.id)]);
+   if(cancelled)return;
+   setItems(rows);setScanned(!!scan);
+   // Competitors added after the last scan have no data yet, so they're filtered out of
+   // the chart rather than shown at a misleading 0%.
+   setSov(scan?shareOfVoice(scan,brand.name).filter(r=>r.isBrand||rows.some(c=>c.name===r.name)):[]);
+   setLoading(false);
   })();
   return ()=>{cancelled=true};
  },[demo,brand]);
@@ -685,7 +692,12 @@ function Competitors({demo,brand}:{demo:boolean;brand?:Brand}){
  if(!brand)return <div className="page-title"><div><span className="overline">LOCAL COMPETITIVE INTELLIGENCE</span><h1>Competitors near you</h1><p>Add a client brand first, then track the local competitors AI recommends instead of them.</p></div></div>;
 
  return <><div className="page-title"><div><span className="overline">LOCAL COMPETITIVE INTELLIGENCE</span><h1>Competitors near you</h1><p>See which nearby businesses in {brand.name}&apos;s category AI recommends instead of them.</p></div><button className="scan-btn" onClick={()=>setModal(true)}><Plus/>Add a local competitor</button></div>
-  {loading?<p>Loading competitors…</p>:items.length===0?<p>No competitors tracked yet for {brand.name}.</p>:<div className="competitor-grid">{items.map(c=><article className="panel competitor-card" key={c.id}><span>{c.name.slice(0,2).toUpperCase()}</span><div><h3>{c.name}</h3><p>{c.domain||"No domain set"}</p></div><button><MoreHorizontal/></button></article>)}</div>}
+  {loading?<p>Loading competitors…</p>:items.length===0?<p>No competitors tracked yet for {brand.name}.</p>:<><div className="competitor-grid">{items.map(c=>{const row=sov.find(r=>r.name===c.name);return <article className="panel competitor-card" key={c.id}><span>{c.name.slice(0,2).toUpperCase()}</span><div><h3>{c.name}</h3><p>{c.domain||"No domain set"}</p></div>{row&&<b>{row.share}%</b>}<button><MoreHorizontal/></button></article>})}</div>
+  <article className="panel"><PanelHead title="Share of AI voice" sub={sov.length?`How often each brand is named across the ${sov[0].total} answers in the latest scan`:"Run a scan to see who AI names for your prompts"}/>
+   {sov.length===0?<p className="muted-note">{scanned?"The latest scan ran before competitor tracking was added. Run a new scan to compare.":`No scan yet for ${brand.name}.`}</p>
+   :<><div className="share-bars">{sov.map(r=><div key={r.name}><span>{r.name}{r.isBrand?" (you)":""}</span><i><b style={{width:r.share+"%"}}/></i><strong>{r.share}%</strong></div>)}</div>
+   <p className="muted-note">Shares don&apos;t total 100% — one answer can name several brands, and being listed alongside a rival is the normal case. {sov.filter(r=>r.avgPosition!=null).length>0&&`Average position when named: ${sov.filter(r=>r.avgPosition!=null).map(r=>`${r.name} ${r.avgPosition}`).join(", ")}.`}</p></>}
+  </article></>}
   {modal&&<div className="modal-back"><div className="modal"><button className="modal-x" onClick={()=>setModal(false)}><X/></button><span className="feature-icon"><Users/></span><h2>Add a local competitor</h2><p>Who else near {brand.name} shows up for these questions?</p>
    <form onSubmit={addCompetitor}>
     <label>Competitor name<input required autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Riverside Plumbing Co."/></label>

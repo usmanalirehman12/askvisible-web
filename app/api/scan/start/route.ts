@@ -34,6 +34,10 @@ export async function POST(request: Request) {
     const { data: promptRows } = await supabase.from("prompts").select("id,query").eq("brand_id", body.brandId).eq("active", true);
     if (!promptRows?.length) return NextResponse.json({ error: "No prompts configured for this brand." }, { status: 400 });
 
+    // Fetched once here rather than per prompt-provider pair, which would be dozens of
+    // identical queries. The client passes the list straight through to /api/scan/prompt.
+    const { data: competitorRows } = await supabase.from("competitors").select("id,name,domain,aliases").eq("brand_id", body.brandId);
+
     const providers = configuredProviders();
     if (!providers.length) return NextResponse.json({ error: "No AI providers configured." }, { status: 503 });
 
@@ -55,6 +59,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       scanRunId: run.id,
       brand: { name: brand.name, domain: brand.domain },
+      competitors: competitorRows || [],
       tasks
     });
   } catch (err) {

@@ -390,6 +390,7 @@ td .up,td .down{display:flex;align-items:center}td svg{width:12px}
 .share-bars>div{display:grid;grid-template-columns:140px 1fr 40px;gap:15px;align-items:center;margin:18px 0;font-size:12px;color:var(--ink)}
 .share-bars i{height:8px;background:var(--line);border-radius:9px}
 .share-bars i b{display:block;background:var(--sky);height:100%;border-radius:9px}
+.muted-note{color:var(--muted);font-size:12px;line-height:1.6;margin:10px 0 0}
 
 /* Overview & Fixes sub-tabs */
 .overview-tabs{display:flex;gap:3px;margin-bottom:16px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:4px}

@@ -281,12 +281,28 @@ Gotcha for future runs: the in-app browser reports *stale* computed colors while
 `npm --prefix` runs the script with the package folder as its working directory, so Next picks up `.env.local` and the app config normally. Verified: `✓ Ready`, `Environments: .env.local`, `GET / 200`, landing page renders, console clean. Running Claude from inside the repo makes all of this moot — `.claude/launch.json` here already has a plain `npm run dev` entry that works as-is.
 
 ### Medium-term
-> Ranked, with sizes and reasoning, in [`PLAN.md`](../PLAN.md#whats-next). Next up is the `schema.sql` drift (Known Bug #5) — smallest item and the only live correctness risk on the list.
+> Ranked, with sizes and reasoning, in [`PLAN.md`](../PLAN.md#whats-next). Everything still open is blocked on a decision or an account only the founder can supply.
 
-- [ ] Competitor scan flow — scan competitors against the same prompts and compare. Groundwork is already there: `competitors` table, `getCompetitors`/`createCompetitor` in `lib/data/competitors.ts`, 25 competitor references in `app/app/page.tsx`. Missing piece is running competitors through the brand's prompts and rendering the comparison.
+- [x] **Competitor share of voice (2026-08-01)** — see below.
 - [ ] Notifications tab in Settings (email alerts for score drops) — blocked on picking a delivery provider (Resend / Postmark / Supabase edge function), not on UI.
-- [ ] Team members tab in Settings (invite by email, roles) — `workspace_members.role` and the RLS already support it; needs UI plus an invite flow.
-- [ ] Billing & usage tab (Stripe integration) — `workspaces.plan` and `usage_months` exist.
+- [ ] Team members tab in Settings (invite by email, roles) — `workspace_members.role` and the RLS already support it; needs UI plus an invite flow. Downstream of the notifications decision, since the invite is an email — building it first means building the invite twice.
+- [ ] Billing & usage tab (Stripe integration) — `workspaces.plan` and `usage_months` exist. Blocked on a Stripe account, real price points, and the over-quota policy (block / warn / bill overage), which shapes the schema.
+- [ ] Delete stale Vercel projects: `websitefixer`, `askvisible-web`, `askvisible-web-tghb` — dashboard only, keep `askvisible-web-mfu2`.
+
+#### Competitor share of voice (shipped 2026-08-01)
+The `answers` table already had an unused `competitor_mentions jsonb` column — the schema anticipated this feature and nothing had ever written to it. Competitors are now matched against the **same answer text** the brand is scored on, inside the same scan.
+
+**Why not scan competitors separately.** It would multiply the provider fan-out by the number of competitors and still answer the wrong question. What matters isn't "how does Rival score on Rival's prompts", it's "when someone asks *our* question, who gets named". One answer, one matcher, one comparison — cheaper and more honest.
+
+- `analyzeCompetitors()` in `lib/ai/analyze.ts` reuses the brand matcher, so name/domain/alias matching is identical for both sides. Every tracked competitor is returned whether or not it was named — an absence is a result, and share of voice needs the zero rows for its denominator.
+- `/api/scan/start` returns competitors once; the client passes them through to `/api/scan/prompt`. Fetching per prompt-provider pair would have been dozens of identical queries.
+- `shareOfVoice()` in `lib/data/stats.ts` aggregates across a run.
+
+**Shares don't sum to 100, on purpose.** One answer naming three brands counts for all three. Forcing a total would mean picking a winner per answer and throwing away the fact that being listed alongside a rival is the normal case — the interesting signal is who gets listed more often. The UI states this so it doesn't read as a bug.
+
+**Old scans read as brand-only.** Pre-existing answers have an empty `competitor_mentions`, so they count toward the denominator without inflating anyone. The tab detects this and asks for a fresh scan rather than showing every competitor at 0%.
+
+**Latent bug fixed on the way through.** `analyzeMention` built its regex from aliases filtered to `length > 2`. With a short name and no domain the list came out empty, compiling to `/\b(?:)\b/i` — which matches nearly any text and reported a mention *everywhere*. Unreachable for most brands, ordinary for a user-entered competitor row. `aliasMatcher()` now returns null for an empty list and the caller reports not-mentioned. `lib/ai/analyze.ts` had no tests before this; it has 20 now.
 - [ ] Delete stale Vercel projects: `websitefixer`, `askvisible-web`, `askvisible-web-tghb`
 
 ---

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { runNamedProvider } from "@/lib/ai/providers";
-import { analyzeMention, extractUrls } from "@/lib/ai/analyze";
+import { analyzeCompetitors, analyzeMention, extractUrls } from "@/lib/ai/analyze";
+import type { CompetitorInput } from "@/lib/ai/analyze";
 import type { ProviderName } from "@/lib/ai/types";
 
 export const runtime = "edge";
@@ -13,7 +14,7 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
 
     const body = await request.json().catch(() => ({}));
-    const { scanRunId, provider, prompt, promptId, brandName, brandDomain } = body;
+    const { scanRunId, provider, prompt, promptId, brandName, brandDomain, competitors } = body;
     if (!scanRunId || !provider || !prompt || !promptId) {
       return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
     }
@@ -29,6 +30,9 @@ export async function POST(request: Request) {
 
     const analysis = analyzeMention(answer.text, brandName || "", brandDomain || "");
     const citations = extractUrls(answer.text);
+    // Same answer text, same matcher — so "we were named, they weren't" is a real
+    // comparison rather than two scans run against different questions.
+    const competitorMentions = analyzeCompetitors(answer.text, Array.isArray(competitors) ? (competitors as CompetitorInput[]) : []);
 
     const { error: ansErr } = await supabase.from("answers").insert({
       run_id: scanRunId,
@@ -39,6 +43,7 @@ export async function POST(request: Request) {
       position: analysis.position,
       sentiment: analysis.sentiment,
       cited_sources: citations,
+      competitor_mentions: competitorMentions,
       tokens_in: answer.tokensIn,
       tokens_out: answer.tokensOut
     });

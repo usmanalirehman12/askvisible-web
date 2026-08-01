@@ -15,19 +15,23 @@ weeks; "delete stale Vercel projects" is one row and five minutes. Read the size
 in the backlog before reading anything into the percentage.
 
 ```
-Product features    ███████████████████░░░░░░░  11 / 15   73%
+Product features    ████████████████████░░░░░░  12 / 15   80%
 Engineering health  ██████████████████████████   7 / 7    100%
 Known debt          ██████████████████████████   3 / 3    100%
 ────────────────────────────────────────────────────────────
-Overall             ████████████████████░░░░░░  21 / 25    84%
+Overall             █████████████████████░░░░░  22 / 25    88%
 ```
 
 | Area | Done | Open |
 |---|---:|---:|
-| Product features | 11 | 4 |
+| Product features | 12 | 3 |
 | Engineering health | 7 | 0 |
 | Known debt | 3 | 0 |
-| **Total** | **21** | **4** |
+| **Total** | **22** | **3** |
+
+The three open items are all **blocked on you**, not on work: an email provider
+decision, a Stripe account, and the Vercel dashboard. Nothing is left that I can pick up
+unilaterally.
 
 ### Shipped — product
 
@@ -44,6 +48,7 @@ Overall             ████████████████████
 | 9 | Scan schedule | `scan_frequency` / `scan_day`, daily Vercel cron at 06:00 UTC |
 | 10 | SEO Audit | 12+ regex checks over fetched HTML, grouped by category |
 | 11 | Google Search Console | Full OAuth, token refresh, metrics + top queries |
+| 12 | Competitor share of voice | Competitors matched against the same answers, in the same scan |
 
 ### Shipped — engineering health
 
@@ -82,28 +87,37 @@ Delete `websitefixer`, `askvisible-web`, `askvisible-web-tghb`. Keep
 live. Three dead projects pointing at the same repo is exactly the confusion that already
 caused one accidental production revert. Housekeeping, but it removes a real foot-gun.
 
-### 3. Competitor scan flow — size L
+### ~~3. Competitor scan flow~~ — DONE 2026-08-01
 
-The largest remaining product gap, and the groundwork is already in place: the
-`competitors` table exists, `lib/data/competitors.ts` has `getCompetitors` and
-`createCompetitor`, and `app/app/page.tsx` already references competitors in 25 places.
-What's missing is running competitors through the same prompts as the brand and rendering
-the comparison. This is the feature that turns a score into a market position.
+Competitors are matched against the same answer text the brand is scored on, during the
+same scan, and the Competitors tab renders share of voice. The `answers` table already had
+an unused `competitor_mentions` jsonb column, which turned out to be exactly the right
+hook. Detail in `.claude/session_notes.md`.
 
-### 4. Notifications tab — size M
+**Needs a fresh scan to show data.** Answers recorded before this change have an empty
+`competitor_mentions`, so the tab will say so and ask for a new run rather than showing
+everyone at 0%.
 
-Email alerts on score drops. Needs a delivery provider decision first (Resend, Postmark,
-Supabase edge function) — that's the blocking question, not the UI.
+### 4. Notifications tab — size M — **needs a decision from you**
 
-### 5. Team members tab — size M
+Email alerts on score drops. The UI and the trigger logic are straightforward; the blocker
+is which delivery provider to use, and that decides the env vars, the cost and the
+deliverability story. Realistic options are Resend (simplest, generous free tier), Postmark
+(best deliverability, paid), or a Supabase edge function over SMTP (no new vendor, most
+setup). I have no basis for choosing on your behalf — it depends on volume and budget.
 
-Invite by email, roles. `workspace_members` already supports multi-user with a `role`
-column; RLS is written against it. Mostly UI plus an invite flow.
+### 5. Team members tab — size M — **downstream of #4**
 
-### 6. Billing & usage — size L
+Invite by email, roles. `workspace_members.role` and the RLS already support it, so this is
+mostly UI plus an invite flow — but the invite is an email, so it inherits whatever
+provider #4 settles on. Doing this first would mean building the invite twice.
 
-Stripe. The biggest of the remaining items and the one most likely to change shape
-depending on how pricing lands. `workspaces.plan` and `usage_months` already exist.
+### 6. Billing & usage — size L — **needs your Stripe account and pricing**
+
+`workspaces.plan` and `usage_months` already exist. Blocked on things only you can supply:
+a Stripe account and keys, the actual price points and tiers, and what happens when a
+workspace exceeds its quota (block, warn, or bill overage). Those decisions shape the
+schema, so guessing them would mean rework.
 
 ---
 
