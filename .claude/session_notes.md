@@ -193,6 +193,16 @@ The `gsc_tokens` table + RLS policy must be run in Supabase SQL Editor. The SQL 
 
 ---
 
+## Working conventions (standing instructions)
+
+- **Ship a progress chart when work completes.** Every time a piece of work finishes, update the chart in [`PLAN.md`](../PLAN.md) and show it. It's a deliverable, not a footnote — progress should be readable at a glance without re-reading this file.
+- **`PLAN.md` and this file are a pair.** `PLAN.md` holds the roadmap, the ranked next-up list and the chart. This file holds the detail: why a thing was built that way, what broke, what to watch for. Finishing an item means ticking it there and explaining it here.
+- **Don't ask for approval on recommended work.** Proceed on obvious calls, state the assumption. Save questions for genuinely difficult or risky decisions.
+- **Verify the artifact, not the build.** Green build ≠ shipped change. Fetch the deployed asset and grep for something unique to the change.
+- **Production deploys come from `git push`.** Never `vercel --prod` from a dirty tree — see the 2026-07-31 revert below.
+
+---
+
 ## Remaining Tasks
 
 ### Immediate / Needs doing before GSC works in prod
@@ -249,10 +259,12 @@ Gotcha for future runs: the in-app browser reports *stale* computed colors while
 `npm --prefix` runs the script with the package folder as its working directory, so Next picks up `.env.local` and the app config normally. Verified: `✓ Ready`, `Environments: .env.local`, `GET / 200`, landing page renders, console clean. Running Claude from inside the repo makes all of this moot — `.claude/launch.json` here already has a plain `npm run dev` entry that works as-is.
 
 ### Medium-term
-- [ ] Competitor scan flow — scan competitors against the same prompts and compare
-- [ ] Notifications tab in Settings (email alerts for score drops)
-- [ ] Team members tab in Settings (invite by email, roles)
-- [ ] Billing & usage tab (Stripe integration)
+> Ranked, with sizes and reasoning, in [`PLAN.md`](../PLAN.md#whats-next). Next up is the `schema.sql` drift (Known Bug #5) — smallest item and the only live correctness risk on the list.
+
+- [ ] Competitor scan flow — scan competitors against the same prompts and compare. Groundwork is already there: `competitors` table, `getCompetitors`/`createCompetitor` in `lib/data/competitors.ts`, 25 competitor references in `app/app/page.tsx`. Missing piece is running competitors through the brand's prompts and rendering the comparison.
+- [ ] Notifications tab in Settings (email alerts for score drops) — blocked on picking a delivery provider (Resend / Postmark / Supabase edge function), not on UI.
+- [ ] Team members tab in Settings (invite by email, roles) — `workspace_members.role` and the RLS already support it; needs UI plus an invite flow.
+- [ ] Billing & usage tab (Stripe integration) — `workspaces.plan` and `usage_months` exist.
 - [ ] Delete stale Vercel projects: `websitefixer`, `askvisible-web`, `askvisible-web-tghb`
 
 ---
