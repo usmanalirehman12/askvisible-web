@@ -1,6 +1,6 @@
 # AskVisibleAI — Session Notes
 
-**Last updated:** 2026-07-31  
+**Last updated:** 2026-08-02  
 **Repo:** usmanalirehman12/askvisible-web  
 **Deploy:** https://askvisible-web-mfu2.vercel.app  
 **Local:** `C:\Users\zayns\OneDrive\Documents\websitefixer`  
@@ -213,6 +213,17 @@ Run the two `update` lines before the `set not null` lines or they'll fail on ex
 ### 6. GSC migration must be run manually
 The `gsc_tokens` table + RLS policy must be run in Supabase SQL Editor. The SQL is in `supabase/schema.sql` but not auto-applied.
 
+### 7. AI Overviews engine failing with a misleading "high demand" 503 — FIXED 2026-08-02
+Reported by the user after a scan: `ai_overviews` skipped on two consecutive runs, both with Gemini's `"This model is currently experiencing high demand"` 503. Confirmed via `vercel logs askvisible-web-mfu2.vercel.app` — not a one-off, same reason both times, 11 minutes apart.
+
+**Root cause: two stacked bugs in `geminiGroundingEndpoint()` (`lib/ai/providers.ts`).**
+- The grounding-tool probe order tried the pre-Gemini-2.0 field name `googleSearchRetrieval` before the current one, `google_search` (confirmed against `ai.google.dev`'s live REST example, which uses `google_search` with model `gemini-3.6-flash`). Not fatal by itself — the loop still reaches the correct format eventually — but it doubles the probe count against every candidate model.
+- The real bug: the function's last-resort fallback (used when every live-model probe fails) was hardcoded to `gemini-1.5-flash` — a model old enough to plausibly be retired by Google. A request to a retired model ID is exactly the case where Gemini's API is known to return a *misleading* 503 "high demand" instead of a clear 404 (same failure shape documented for the plain `gemini` engine in an earlier project). The plain `gemini` engine never hit this because its own discovery (`geminiEndpoint()`) succeeds without needing the extra `tools` param, so it never falls through to its hardcoded default; grounding's stricter probe (model **and** tool format) apparently was.
+
+**Fix:** swapped the probe order to try `google_search` first, updated both hardcoded fallback model strings (`gemini-1.5-flash` → `gemini-3.6-flash`, matching Google's own current docs) in the `gemini` and `ai_overviews` provider setup, and fixed the ultimate grounding fallback to use `google_search` instead of the deprecated tool name.
+
+**Not independently unit-tested** — `lib/ai/providers.ts` makes live HTTP calls and has no test file; verifying needs a real `GEMINI_API_KEY` and `GOOGLE_AI_OVERVIEWS=true`, which only exist in Vercel prod. Verify by running a scan and checking the AI Overviews engine returns real data instead of a skip. If it still fails, re-check `vercel logs` for the new failure reason — a different message would rule this fix out and point elsewhere (e.g. grounding not enabled for the API key's tier).
+
 ---
 
 ## Working conventions (standing instructions)
@@ -285,10 +296,11 @@ Gotcha for future runs: the in-app browser reports *stale* computed colors while
 
 - [x] **Competitor share of voice (2026-08-01)** — see below.
 - [x] **Score-drop email alerts (2026-08-01)** — see below.
-- [x] **Team members (2026-08-01)** — see below. **Needs a migration run in Supabase.**
+- [x] **Team members (2026-08-01)** — see below. Migration run in Supabase 2026-08-02, tab is live.
 - [x] **Multi-workspace switching (2026-08-01)** — see below.
+- [x] **Delete stale Vercel projects (2026-08-02, you)** — `websitefixer`, `askvisible-web`, `askvisible-web-tghb` deleted. Only `askvisible-web-mfu2` remains.
 - [ ] Billing & usage tab (Stripe integration) — `workspaces.plan` and `usage_months` exist. Blocked on a Stripe account, real price points, and the over-quota policy (block / warn / bill overage), which shapes the schema.
-- [ ] Delete stale Vercel projects: `websitefixer`, `askvisible-web`, `askvisible-web-tghb` — dashboard only, keep `askvisible-web-mfu2`.
+- [ ] Resend setup (domain verify, API key, env vars in Vercel) — score-drop alerts are coded and deployed but `emailConfigured()` is false until this is done.
 
 #### Team members (shipped 2026-08-01)
 
@@ -377,7 +389,6 @@ The `answers` table already had an unused `competitor_mentions jsonb` column —
 **Old scans read as brand-only.** Pre-existing answers have an empty `competitor_mentions`, so they count toward the denominator without inflating anyone. The tab detects this and asks for a fresh scan rather than showing every competitor at 0%.
 
 **Latent bug fixed on the way through.** `analyzeMention` built its regex from aliases filtered to `length > 2`. With a short name and no domain the list came out empty, compiling to `/\b(?:)\b/i` — which matches nearly any text and reported a mention *everywhere*. Unreachable for most brands, ordinary for a user-entered competitor row. `aliasMatcher()` now returns null for an empty list and the caller reports not-mentioned. `lib/ai/analyze.ts` had no tests before this; it has 20 now.
-- [ ] Delete stale Vercel projects: `websitefixer`, `askvisible-web`, `askvisible-web-tghb`
 
 ---
 

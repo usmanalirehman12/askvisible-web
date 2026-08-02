@@ -68,13 +68,16 @@ function geminiGroundingEndpoint(key: string, preferred: string): Promise<{ mode
     let models: string[] = []; let listVer = "v1";
     for (const ver of ["v1", "v1beta"]) { const m = await _gListModels(key, ver); if (m.length) { models = m; listVer = ver; break; } }
     const altVer = listVer === "v1" ? "v1beta" : "v1";
-    const groundingFmts = [[{ googleSearchRetrieval: {} }], [{ google_search: {} }]];
+    // google_search is the current REST field (per ai.google.dev); googleSearchRetrieval is the
+    // pre-Gemini-2.0 name, kept as a fallback for older models. Tried in that order so current
+    // models resolve on the first probe instead of burning a request on a form they'll reject.
+    const groundingFmts = [[{ google_search: {} }], [{ googleSearchRetrieval: {} }]];
     for (const model of _gSortModels(models)) {
       for (const ver of [listVer, altVer]) {
         for (const tools of groundingFmts) { if (await _gProbe(key, model, ver, tools)) return { model, ver, tools }; }
       }
     }
-    return { model: preferred, ver: "v1beta", tools: [{ googleSearchRetrieval: {} }] };
+    return { model: preferred, ver: "v1beta", tools: [{ google_search: {} }] };
   })());
 }
 
@@ -91,7 +94,7 @@ export function configuredProviders(): Provider[] {
     providers.push({ name: "openai", model, async run(prompt) { const started=Date.now(); const d=await postJson("https://api.openai.com/v1/responses",{method:"POST",headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({model,instructions:SYSTEM,input:prompt,max_output_tokens:400})}); const text=d.output_text || d.output?.flatMap((o:any)=>o.content||[]).filter((c:any)=>c.type==="output_text").map((c:any)=>c.text).join("\n") || ""; return answer("openai",model,prompt,text,[],d.usage,started); } });
   }
   if (process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-    const key=process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY; const preferred=process.env.GEMINI_MODEL || "gemini-1.5-flash";
+    const key=process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY; const preferred=process.env.GEMINI_MODEL || "gemini-3.6-flash";
     providers.push({ name:"gemini",model:preferred,async run(prompt){const started=Date.now();const {model,ver}=await geminiEndpoint(key!,preferred);const d=await postJson(`https://generativelanguage.googleapis.com/${ver}/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({contents:[{role:"user",parts:[{text:SYSTEM+"\n\n"+prompt}]}],generationConfig:{maxOutputTokens:400}})});const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("gemini",model,prompt,text,[],d.usageMetadata,started)}});
   }
   if (process.env.PERPLEXITY_API_KEY) {
@@ -111,7 +114,7 @@ export function configuredProviders(): Provider[] {
   // explicitly opted in (GOOGLE_AI_OVERVIEWS=true) since it runs a second Gemini call per
   // prompt and search grounding incurs additional billing on Google's paid tiers.
   if ((process.env.GEMINI_API_KEY||process.env.GOOGLE_GENERATIVE_AI_API_KEY) && process.env.GOOGLE_AI_OVERVIEWS?.trim() === "true") {
-    const key=process.env.GEMINI_API_KEY||process.env.GOOGLE_GENERATIVE_AI_API_KEY; const preferred="gemini-1.5-flash";
+    const key=process.env.GEMINI_API_KEY||process.env.GOOGLE_GENERATIVE_AI_API_KEY; const preferred="gemini-3.6-flash";
     providers.push({name:"ai_overviews",model:preferred,async run(prompt){const started=Date.now();const {model,ver,tools}=await geminiGroundingEndpoint(key!,preferred);const d=await postJson(`https://generativelanguage.googleapis.com/${ver}/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({contents:[{role:"user",parts:[{text:SYSTEM+"\n\n"+prompt}]}],tools,generationConfig:{maxOutputTokens:400}})},1,20_000);const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("ai_overviews",model,prompt,text,[],d.usageMetadata,started)}});
   }
   return providers;

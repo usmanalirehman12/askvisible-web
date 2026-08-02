@@ -4,7 +4,7 @@ Working plan for the product. Detailed history, architectural decisions and debu
 notes live in [`.claude/session_notes.md`](.claude/session_notes.md); this file is the
 short version: what's done, what's next, and why.
 
-Last updated: 2026-08-01 (step 1 of the backlog complete)
+Last updated: 2026-08-02 (team migration run, stale Vercel projects deleted)
 
 ---
 
@@ -78,16 +78,11 @@ cron then silently stopped scanning that brand. Rule now lives in
 `lib/data/scan-schedule.ts` with 17 tests. Detail and the optional
 make-live-match-the-file `ALTER` block are in `.claude/session_notes.md` under Known Bug #5.
 
-### 2. Delete the stale Vercel projects — size XS, ~5 min — **needs you**
+### ~~2. Delete the stale Vercel projects~~ — DONE 2026-08-02 (you)
 
-I can't do this one: no Vercel CLI here, and deleting projects is destructive on your
-account. Dashboard → each project → Settings → scroll to bottom → Delete Project.
-Delete `websitefixer`, `askvisible-web`, `askvisible-web-tghb`. Keep
-**`askvisible-web-mfu2`** — that's production.
-
-`websitefixer`, `askvisible-web`, `askvisible-web-tghb`. Only `askvisible-web-mfu2` is
-live. Three dead projects pointing at the same repo is exactly the confusion that already
-caused one accidental production revert. Housekeeping, but it removes a real foot-gun.
+`websitefixer`, `askvisible-web`, `askvisible-web-tghb` deleted. Only
+`askvisible-web-mfu2` remains — one project, one repo, no more ambiguity about which
+one is live.
 
 ### ~~3. Competitor scan flow~~ — DONE 2026-08-01
 
@@ -114,10 +109,12 @@ Setup: sign up at resend.com → add your domain → paste the DNS records into 
 create a send-only API key → add both env vars. The from-address must be on the verified
 domain or every send returns 403.
 
-### ~~5. Team members tab~~ — DONE 2026-08-01
+### ~~5. Team members tab~~ — DONE 2026-08-01, migration applied 2026-08-02
 
 Invite by email with a role, accept flow, revoke, remove, leave. Permission rules are pure
-functions in `lib/data/team.ts` with 23 tests. Needs the migration below.
+functions in `lib/data/team.ts` with 23 tests. Migration is live in Supabase — the tab
+should work end to end now. Worth one check: open Settings → Team members and confirm
+you're listed as `owner`.
 
 ### ~~5b. Multi-workspace switching~~ — DONE 2026-08-01
 
