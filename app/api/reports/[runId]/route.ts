@@ -22,7 +22,7 @@ export async function GET(request: Request, { params }: { params: { runId: strin
 
   const { data: rawAnswers } = await supabase
     .from("answers")
-    .select("id, engine, brand_mentioned, position, sentiment, prompts(query, brand_id, brands(id, name, domain))")
+    .select("id, engine, raw_answer, brand_mentioned, position, sentiment, created_at, prompts(query, brand_id, brands(id, name, domain))")
     .eq("run_id", runId);
 
   if (!rawAnswers?.length) return NextResponse.json({ error: "No data for this run" }, { status: 404 });
@@ -52,9 +52,11 @@ export async function GET(request: Request, { params }: { params: { runId: strin
     answers: rawAnswers.map((a: any) => ({
       id: a.id,
       engine: a.engine,
+      text: a.raw_answer || "",
       brand_mentioned: a.brand_mentioned,
       position: a.position,
       sentiment: a.sentiment,
+      createdAt: a.created_at,
       prompt: a.prompts?.query || "—"
     })),
     fixes

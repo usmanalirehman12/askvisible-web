@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -724,7 +724,7 @@ function Competitors({demo,brand}:{demo:boolean;brand?:Brand}){
  </>;
 }
 
-type ReportDetail={run:{id:string;completedAt:string|null;confidence:number|null;score:number;mentions:number;total:number};brand:{name:string;domain:string};answers:{id:string;engine:string;brand_mentioned:boolean;position:number|null;sentiment:string;prompt:string}[];fixes:{id:string;category:string;title:string;rationale:string|null;impact_low:number|null;impact_high:number|null;status:string}[]};
+type ReportDetail={run:{id:string;completedAt:string|null;confidence:number|null;score:number;mentions:number;total:number};brand:{name:string;domain:string};answers:{id:string;engine:string;text:string;brand_mentioned:boolean;position:number|null;sentiment:string;createdAt:string|null;prompt:string}[];fixes:{id:string;category:string;title:string;rationale:string|null;impact_low:number|null;impact_high:number|null;status:string}[]};
 function groupByEngineRaw(answers:{engine:string;brand_mentioned:boolean}[]){const byKey=new Map<string,{mentioned:number;total:number}>();for(const a of answers){const e=byKey.get(a.engine)||{mentioned:0,total:0};e.total++;if(a.brand_mentioned)e.mentioned++;byKey.set(a.engine,e)}return Array.from(byKey.entries()).map(([key,{mentioned,total}])=>{const meta=engineByKey[key]||{name:key,short:key[0]?.toUpperCase()||"?",color:"green"};const pct=total?Math.round(mentioned/total*100):0;return{key,name:meta.name,short:meta.short,color:meta.color,pct}})}
 function Reports({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:number}){
  const history=useScanHistory(demo,brand,refreshKey);
@@ -759,6 +759,7 @@ function Reports({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:n
 }
 function ReportViewer({runId,report,loading,history,onClose}:{runId:string;report:ReportDetail|null;loading:boolean;history:ScanHistoryEntry[];onClose:()=>void}){
  function printReport(){window.print()}
+ const [expandedId,setExpandedId]=useState<string|null>(null);
  const histIdx=report?history.findIndex(h=>h.runId===runId):-1;
  const isBaseline=histIdx===0;
  const prev=histIdx>0?history[histIdx-1]:null;
@@ -807,8 +808,21 @@ function ReportViewer({runId,report,loading,history,onClose}:{runId:string;repor
      </div>
     </div>
     <div className="rv-section">
-     <div className="rv-section-title">Prompt results ({report.answers.length})</div>
-     <div className="table-wrap"><table><thead><tr><th>Prompt</th><th>Engine</th><th>Status</th><th>Position</th><th>Sentiment</th></tr></thead><tbody>{report.answers.map(a=><tr key={a.id}><td><b>{a.prompt}</b></td><td>{engineByKey[a.engine]?.name||a.engine}</td><td><span className={a.brand_mentioned?"status yes":"status no"}>{a.brand_mentioned?"Mentioned":"Not mentioned"}</span></td><td>{a.position?`#${a.position}`:"—"}</td><td>{a.sentiment==="not-mentioned"?"—":a.sentiment}</td></tr>)}</tbody></table></div>
+     <div className="rv-section-title">Prompt results ({report.answers.length}) <span style={{fontWeight:400,fontSize:"11px",color:"var(--muted)",textTransform:"none",letterSpacing:0}}>— click a row to view the full response</span></div>
+     <div className="table-wrap"><table><thead><tr><th style={{width:"24px"}}></th><th>Prompt</th><th>Engine</th><th>Status</th><th>Position</th><th>Sentiment</th></tr></thead><tbody>{report.answers.map(a=>{const open=expandedId===a.id;return <Fragment key={a.id}>
+      <tr onClick={()=>setExpandedId(open?null:a.id)} style={{cursor:"pointer"}}>
+       <td><ChevronDown style={{width:"14px",color:"var(--faint)",transition:"transform .15s",transform:open?"rotate(0deg)":"rotate(-90deg)"}}/></td>
+       <td><b>{a.prompt}</b></td>
+       <td>{engineByKey[a.engine]?.name||a.engine}</td>
+       <td><span className={a.brand_mentioned?"status yes":"status no"}>{a.brand_mentioned?"Mentioned":"Not mentioned"}</span></td>
+       <td>{a.position?`#${a.position}`:"—"}</td>
+       <td>{a.sentiment==="not-mentioned"?"—":a.sentiment}</td>
+      </tr>
+      {open&&<tr className="no-print"><td></td><td colSpan={5} style={{background:"var(--soft)",padding:"14px 16px",fontSize:"12px",lineHeight:1.6,color:"var(--ink)",whiteSpace:"pre-wrap"}}>
+       {a.text?a.text:<span style={{color:"var(--muted)",fontStyle:"italic"}}>No response text recorded for this answer.</span>}
+       {a.createdAt&&<div style={{marginTop:"10px",fontSize:"11px",color:"var(--muted)"}}>Answered {new Date(a.createdAt).toLocaleString(undefined,{dateStyle:"medium",timeStyle:"short"})}</div>}
+      </td></tr>}
+     </Fragment>})}</tbody></table></div>
     </div>
     {report.fixes.length>0&&<div className="rv-section">
      <div className="rv-section-title">AI-recommended fixes ({report.fixes.length})</div>
