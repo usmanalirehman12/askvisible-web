@@ -15,22 +15,22 @@ weeks; "delete stale Vercel projects" is one row and five minutes. Read the size
 in the backlog before reading anything into the percentage.
 
 ```
-Product features    ████████████████████████░░  14 / 16   88%
+Product features    ████████████████████████░░  15 / 16   94%
 Engineering health  ██████████████████████████   7 / 7    100%
 Known debt          ██████████████████████████   3 / 3    100%
 ────────────────────────────────────────────────────────────
-Overall             ████████████████████████░░  24 / 26    92%
+Overall             █████████████████████████░  25 / 26    96%
 ```
 
 | Area | Done | Open |
 |---|---:|---:|
-| Product features | 14 | 2 |
+| Product features | 15 | 1 |
 | Engineering health | 7 | 0 |
 | Known debt | 3 | 0 |
-| **Total** | **24** | **2** |
+| **Total** | **25** | **1** |
 
-The denominator grew by one: shipping team invites surfaced **multi-workspace switching**
-as a real, separable piece of work rather than a hypothetical. See below.
+Only billing is left, and it needs your Stripe account and real pricing. Everything I can
+build without you is built.
 
 ### Shipped — product
 
@@ -50,6 +50,7 @@ as a real, separable piece of work rather than a hypothetical. See below.
 | 12 | Competitor share of voice | Competitors matched against the same answers, in the same scan |
 | 13 | Score-drop email alerts | Resend, fires on a 10+ point fall vs the previous scan |
 | 14 | Team members | Invite by email with roles, accept flow, revoke and remove |
+| 15 | Multi-workspace switching | Sidebar switcher; appears only for people in 2+ workspaces |
 
 ### Shipped — engineering health
 
@@ -118,17 +119,11 @@ domain or every send returns 403.
 Invite by email with a role, accept flow, revoke, remove, leave. Permission rules are pure
 functions in `lib/data/team.ts` with 23 tests. Needs the migration below.
 
-### 5b. Multi-workspace switching — size M — **new, surfaced by the invite work**
+### ~~5b. Multi-workspace switching~~ — DONE 2026-08-01
 
-Someone who belongs to two workspaces can only see one. `getWorkspaceContext` picks a
-single membership, so an invited user would have landed in the empty workspace their
-signup created and the invite would have looked broken. The stopgap is ordering by
-`joined_at` descending, which makes the just-accepted workspace win — good enough for the
-common case (new person invited to a team), not good enough for anyone genuinely in two.
-
-This was always noted as "deferred scope"; shipping invites turned it into something with
-a real user behind it. The fix is a workspace switcher mirroring the existing brand
-switcher, plus returning all memberships from `getWorkspaceContext`.
+Sidebar switcher, rendered only for people in 2+ workspaces. `getWorkspaceContext` returns
+every membership with the caller's role in each, and `/api/team` takes an explicit
+workspace id so it can't manage the wrong team after a switch.
 
 ### 6. Billing & usage — size L — **needs your Stripe account and pricing**
 

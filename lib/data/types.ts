@@ -19,12 +19,24 @@ export type Competitor = {
   domain: string | null;
 };
 
+export type WorkspaceSummary = {
+  id: string;
+  name: string;
+  plan: string;
+  role: string;
+};
+
 export type WorkspaceContext = {
   fullName: string;
   email: string;
   workspaceId: string;
   workspaceName: string;
   plan: string;
+  // The caller's role in the active workspace, so the UI can hide actions it knows the
+  // server would reject rather than showing a button that always errors.
+  role: string;
+  // Every workspace the user belongs to, for the switcher. Usually one.
+  workspaces: WorkspaceSummary[];
   brands: Brand[];
 };
 

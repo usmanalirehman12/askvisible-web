@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Activity, AlertCircle, ArrowDownRight, ArrowLeft, ArrowUpRight, BarChart3, Bell, Check, ChevronDown, CircleHelp, Edit2, FileText, Gauge, Globe, LayoutDashboard, Link2, LoaderCircle, LogOut, Mail, Menu, Moon, MoreHorizontal, Play, Plus, Radar, Search, Settings, Sparkles, Sun, Target, Trash2, TrendingUp, Users, WandSparkles, X } from "lucide-react";
+import { Activity, AlertCircle, ArrowDownRight, ArrowLeft, ArrowUpRight, BarChart3, Bell, Building2, Check, ChevronDown, CircleHelp, Edit2, FileText, Gauge, Globe, LayoutDashboard, Link2, LoaderCircle, LogOut, Mail, Menu, Moon, MoreHorizontal, Play, Plus, Radar, Search, Settings, Sparkles, Sun, Target, Trash2, TrendingUp, Users, WandSparkles, X } from "lucide-react";
 import { supabaseConfigured } from "@/lib/supabase/config";
 import type { Brand, Competitor, Fix, Prompt, WorkspaceContext } from "@/lib/data/types";
 import type { ScanAnswerRow, ShareOfVoiceRow } from "@/lib/data/stats";
@@ -43,6 +43,8 @@ export default function AppPage(){
   if(p.get("gsc_error")){setToast("GSC connection failed: "+p.get("gsc_error"));window.history.replaceState({},"","/app")}
  },[]);
 
+ const [workspaceId,setWorkspaceId]=useState<string|null>(()=>typeof window!=="undefined"?localStorage.getItem("av-active-workspace"):null);
+
  useEffect(()=>{
   if(demo)return;
   let cancelled=false;
@@ -50,20 +52,32 @@ export default function AppPage(){
    try{
     const [{createClient},{getWorkspaceContext}]=await Promise.all([import("@/lib/supabase/client"),import("@/lib/data/workspace")]);
     const supabase=createClient();
-    const result=await getWorkspaceContext(supabase);
+    const result=await getWorkspaceContext(supabase,workspaceId);
     if(cancelled)return;
     if(!result){router.push("/login");return}
+    // Write back what was actually resolved, not what was asked for. A stale id — from
+    // being removed from a team, say — gets corrected here instead of being retried on
+    // every load.
+    localStorage.setItem("av-active-workspace",result.workspaceId);
     setCtx(result);
    }catch(err){if(!cancelled)setCtxError(err instanceof Error?err.message:"Couldn't load your workspace.")}
    finally{if(!cancelled)setCtxLoading(false)}
   })();
   return ()=>{cancelled=true};
  // eslint-disable-next-line react-hooks/exhaustive-deps
- },[]);
+ },[workspaceId]);
 
  const [activeBrandId,setActiveBrandId]=useState<string|null>(()=>typeof window!=="undefined"?localStorage.getItem("av-active-brand"):null);
  const activeBrand=ctx?.brands.find(b=>b.id===activeBrandId)||ctx?.brands[0];
  function selectBrand(id:string){setActiveBrandId(id);localStorage.setItem("av-active-brand",id)}
+ function selectWorkspace(id:string){
+  if(id===ctx?.workspaceId)return;
+  // The remembered brand belongs to the old workspace, so clear it or the new workspace
+  // opens on a brand that isn't in it.
+  localStorage.removeItem("av-active-brand");setActiveBrandId(null);
+  localStorage.setItem("av-active-workspace",id);
+  setCtxLoading(true);setWorkspaceId(id);
+ }
 
  async function scan(){
   if(demo){setScanning(true);setTimeout(()=>{setScanning(false);setToast("Scan complete — 4 new mentions found");setTimeout(()=>setToast(""),3500)},1800);return}
@@ -113,6 +127,7 @@ export default function AppPage(){
  return <main className="app-shell">{toast&&<div className="toast"><Check/>{toast}</div>}
   <aside className={`sidebar ${open?"open":""}`}>
    <div className="side-brand"><Link className="brand" href="/"><span className="brand-mark">a</span>askvisibleai</Link><button className="mobile-close" onClick={()=>setOpen(false)}><X/></button></div>
+   <WorkspaceSwitcher ctx={ctx} onSelectWorkspace={selectWorkspace}/>
    <BrandSwitcher demo={demo} ctx={ctx} activeBrandId={activeBrand?.id} onSelectBrand={selectBrand} onBrandAdded={b=>{setCtx(c=>c?{...c,brands:[...c.brands,b]}:c);selectBrand(b.id)}}/>
    <nav>{nav.map(n=><button key={n.id} className={section===n.id?"active":""} onClick={()=>{setSection(n.id);setOpen(false)}}><n.icon/>{n.label}</button>)}</nav>
    <div className="side-bottom">
@@ -896,15 +911,39 @@ function SettingsPage({demo,brand,ctx,onBrandUpdated}:{demo:boolean;brand?:Brand
       </div>
      </div>
     </>}
-    {tab==="team"&&<TeamSettings demo={demo}/>}
+    {tab==="team"&&<TeamSettings demo={demo} workspaceId={ctx?.workspaceId}/>}
    </article>
   </div></>;
+}
+
+// Renders nothing for the single-workspace case, which is almost everyone. Only someone
+// who has accepted an invite to a second team ever sees this.
+function WorkspaceSwitcher({ctx,onSelectWorkspace}:{ctx:WorkspaceContext|null;onSelectWorkspace:(id:string)=>void}){
+ const [modal,setModal]=useState(false);
+ if(!ctx||ctx.workspaces.length<2)return null;
+ return <>
+  <button className="workspace-switch" onClick={()=>setModal(true)} title="Switch workspace">
+   <Building2/><div><small>Workspace</small><b>{ctx.workspaceName}</b></div><ChevronDown/>
+  </button>
+  {modal&&typeof document!=="undefined"&&createPortal(<div className="modal-back"><div className="modal">
+   <button className="modal-x" onClick={()=>setModal(false)}><X/></button>
+   <span className="feature-icon"><Building2/></span><h2>Switch workspace</h2>
+   <p>You belong to {ctx.workspaces.length} workspaces. Each has its own clients, prompts and team.</p>
+   <ul className="client-list">{ctx.workspaces.map(w=><li key={w.id}>
+    <button type="button" className={w.id===ctx.workspaceId?"active":""} aria-current={w.id===ctx.workspaceId||undefined} onClick={()=>{onSelectWorkspace(w.id);setModal(false)}}>
+     <div><b>{w.name}</b><small>{w.role} · {w.plan} plan</small></div>{w.id===ctx.workspaceId&&<Check size={15}/>}
+    </button></li>)}</ul>
+  </div></div>,document.body)}
+ </>;
 }
 
 type TeamMember={userId:string;name:string|null;email:string|null;role:string;isYou:boolean};
 type TeamInvite={id:string;email:string;role:string;expires_at:string};
 
-function TeamSettings({demo}:{demo:boolean}){
+// workspaceId is passed explicitly rather than letting the route pick: after a switch the
+// server's default (newest membership) is the wrong team, and silently managing the wrong
+// one is the sort of bug nobody notices until they've removed the wrong person.
+function TeamSettings({demo,workspaceId}:{demo:boolean;workspaceId?:string}){
  const [role,setRole]=useState<string|null>(null);
  const [members,setMembers]=useState<TeamMember[]>([]);
  const [invites,setInvites]=useState<TeamInvite[]>([]);
@@ -913,18 +952,19 @@ function TeamSettings({demo}:{demo:boolean}){
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
 
  async function load(){
-  const r=await fetch("/api/team");const d=await r.json().catch(()=>({}));
+  const r=await fetch(`/api/team${workspaceId?`?workspaceId=${encodeURIComponent(workspaceId)}`:""}`);
+  const d=await r.json().catch(()=>({}));
   if(r.ok){setRole(d.role);setMembers(d.members||[]);setInvites(d.invitations||[])}
   else setError(d.error||"Couldn't load the team.");
   setLoading(false);
  }
- useEffect(()=>{if(demo){setLoading(false);return}load()},[demo]);
+ useEffect(()=>{if(demo){setLoading(false);return}setLoading(true);load()},[demo,workspaceId]);
 
  const canManage=role==="owner"||role==="admin";
 
  async function invite(e:React.FormEvent){
   e.preventDefault();setBusy(true);setError("");setNotice("");
-  const r=await fetch("/api/team",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,role:inviteRole})});
+  const r=await fetch("/api/team",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,role:inviteRole,workspaceId})});
   const d=await r.json().catch(()=>({}));
   setBusy(false);
   if(!r.ok){setError(d.error||"Couldn't send that invitation.");return}
@@ -938,7 +978,7 @@ function TeamSettings({demo}:{demo:boolean}){
  async function remove(body:Record<string,string>,confirmText:string){
   if(!window.confirm(confirmText))return;
   setError("");setNotice("");
-  const r=await fetch("/api/team",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const r=await fetch("/api/team",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({...body,workspaceId})});
   const d=await r.json().catch(()=>({}));
   if(!r.ok){setError(d.error||"That didn't work.");return}
   load();

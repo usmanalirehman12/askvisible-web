@@ -286,7 +286,7 @@ Gotcha for future runs: the in-app browser reports *stale* computed colors while
 - [x] **Competitor share of voice (2026-08-01)** — see below.
 - [x] **Score-drop email alerts (2026-08-01)** — see below.
 - [x] **Team members (2026-08-01)** — see below. **Needs a migration run in Supabase.**
-- [ ] Multi-workspace switching — surfaced as real work by the invite flow, see below.
+- [x] **Multi-workspace switching (2026-08-01)** — see below.
 - [ ] Billing & usage tab (Stripe integration) — `workspaces.plan` and `usage_months` exist. Blocked on a Stripe account, real price points, and the over-quota policy (block / warn / bill overage), which shapes the schema.
 - [ ] Delete stale Vercel projects: `websitefixer`, `askvisible-web`, `askvisible-web-tghb` — dashboard only, keep `askvisible-web-mfu2`.
 
@@ -333,8 +333,15 @@ create policy "members read teammates" on public.workspace_members for select us
 
 The invite URL is returned from the API even when the email send fails. An invitation the inviter can't see is worse than one they paste into Slack themselves.
 
-#### Multi-workspace switching (open — surfaced 2026-08-01)
-Always noted as deferred; the invite flow gave it a real user. Someone in two workspaces can only ever see one, because `getWorkspaceContext` takes a single membership row. The `joined_at desc` ordering makes the common case work (new person invited to a team) but not the genuine one (a contractor in two agencies). Fix is a workspace switcher mirroring the existing brand switcher, plus returning all memberships from `getWorkspaceContext`.
+#### Multi-workspace switching (shipped 2026-08-01)
+`getWorkspaceContext(supabase, preferredId?)` now returns every workspace the user belongs to with their role in each — the same round trip as fetching one, and the switcher needs the names. The sidebar switcher renders **only when there are 2+ workspaces**, so the ordinary single-workspace user sees no change.
+
+- **The preference is user-controlled and that's fine.** It comes from `localStorage`, and is only honoured when it matches a row that already came back through RLS. A forged id matches nothing and falls through to the default. `pickWorkspaceId` is pure with the fallback order pinned by tests — the check is for correctness, not security.
+- **Switching clears the remembered brand.** It belongs to the old workspace; keeping it would open the new workspace on a brand that isn't in it.
+- **The resolved id is written back, not the requested one.** A stale id — from being removed from a team — self-corrects on load instead of being retried every time.
+- **`/api/team` takes an explicit `workspaceId`.** Its default is the newest membership, which after a switch is the *wrong team*. Silently managing the wrong team is the sort of bug nobody notices until they've removed the wrong person.
+
+**CSS specificity trap, caught by rendering rather than reading.** `.sidebar button{border:0}` is (0,1,1) and out-specifies a bare `.workspace-switch` (0,1,0), so the border silently did not exist — computed `border-style: none`, width `0`. What made it look plausible was the reported `border-color` matching the text colour exactly, because with no border the value falls back to inherited `currentColor`. Scoping the rule as `.sidebar .workspace-switch` fixes it. **Any new sidebar control needs that scope**, or `.sidebar button` will quietly strip its border.
 
 #### Score-drop email alerts (shipped 2026-08-01)
 Cron sends the workspace owner an email when a brand's score falls 10+ points against the previous scan. **Not live until `RESEND_API_KEY` and `ALERT_FROM_EMAIL` are set in Vercel** — `emailConfigured()` is checked first, so until then the cron skips alerting and nothing errors.

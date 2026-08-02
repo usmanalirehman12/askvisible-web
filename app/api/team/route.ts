@@ -14,23 +14,26 @@ type Caller = { userId: string; workspaceId: string; role: TeamRole };
 // Establishes who is asking and what they may do. The caller's own membership row is read
 // with their session client, so an unauthenticated or non-member request can't get past
 // this even though everything after it uses the service role.
-async function caller(): Promise<Caller | null> {
+async function caller(requestedWorkspaceId?: string | null): Promise<Caller | null> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data: membership } = await supabase
+  const { data: memberships } = await supabase
     .from("workspace_members")
     .select("workspace_id, role")
     .eq("user_id", user.id)
-    .order("joined_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!membership || !isTeamRole(membership.role)) return null;
-  return { userId: user.id, workspaceId: membership.workspace_id, role: membership.role };
+    .order("joined_at", { ascending: false });
+
+  const rows = memberships || [];
+  // The requested id is only honoured if it appears in the caller's own membership rows,
+  // so asking about someone else's workspace resolves to your own rather than theirs.
+  const chosen = (requestedWorkspaceId && rows.find(m => m.workspace_id === requestedWorkspaceId)) || rows[0];
+  if (!chosen || !isTeamRole(chosen.role)) return null;
+  return { userId: user.id, workspaceId: chosen.workspace_id, role: chosen.role };
 }
 
-export async function GET() {
-  const me = await caller();
+export async function GET(request: Request) {
+  const me = await caller(new URL(request.url).searchParams.get("workspaceId"));
   if (!me) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
 
   const service = createServiceClient();
@@ -55,10 +58,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const me = await caller();
+  const body = await request.json().catch(() => ({}));
+  const me = await caller(body.workspaceId);
   if (!me) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
 
-  const body = await request.json().catch(() => ({}));
   const email = normaliseEmail(body.email);
   if (!email) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
 
@@ -115,10 +118,10 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const me = await caller();
+  const body = await request.json().catch(() => ({}));
+  const me = await caller(body.workspaceId);
   if (!me) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
 
-  const body = await request.json().catch(() => ({}));
   const service = createServiceClient();
 
   if (body.invitationId) {
