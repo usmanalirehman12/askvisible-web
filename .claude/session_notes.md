@@ -222,7 +222,7 @@ Reported by the user after a scan: `ai_overviews` skipped on two consecutive run
 
 **Fix:** swapped the probe order to try `google_search` first, updated both hardcoded fallback model strings (`gemini-1.5-flash` → `gemini-3.6-flash`, matching Google's own current docs) in the `gemini` and `ai_overviews` provider setup, and fixed the ultimate grounding fallback to use `google_search` instead of the deprecated tool name.
 
-**Not independently unit-tested** — `lib/ai/providers.ts` makes live HTTP calls and has no test file; verifying needs a real `GEMINI_API_KEY` and `GOOGLE_AI_OVERVIEWS=true`, which only exist in Vercel prod. Verify by running a scan and checking the AI Overviews engine returns real data instead of a skip. If it still fails, re-check `vercel logs` for the new failure reason — a different message would rule this fix out and point elsewhere (e.g. grounding not enabled for the API key's tier).
+**Confirmed working 2026-08-02** — the next scan returned real AI Overviews data instead of a skip, and stayed clean across two further scans.
 
 ### 8. ChatGPT silently recording blank answers as "not mentioned" — FIXED 2026-08-02
 User noticed ChatGPT at 0% and, per the new step-by-step-instructions convention, was walked through a Supabase SQL Editor query against `public.answers` rather than pointed at a UI section — good thing, since there's no UI for raw answer text yet (see below). The query showed the actual bug: 2 of 5 ChatGPT rows for the latest run had `raw_answer = ''` (empty string) and `brand_mentioned = false`, most tellingly on "alternatives to The Greeting Shelf" — a prompt that contains the brand's own name, which every *other* engine matched correctly. An empty answer isn't a real "not mentioned" result; it's missing data that happened to get stored as if it were one.
@@ -231,7 +231,7 @@ User noticed ChatGPT at 0% and, per the new step-by-step-instructions convention
 
 **Fix:** bumped OpenAI's `max_output_tokens` 400 → 800 (more headroom before reasoning can eat the whole budget), and added an explicit check: if `output_text` comes back empty *and* `status === "incomplete"`, throw instead of returning an empty answer — so it now surfaces as a real provider failure (shows in the skip banner and `vercel logs`, like the Anthropic/Gemini issues) instead of silently poisoning the mention data. Deliberately didn't touch the model's `reasoning` effort parameter — can't confirm without knowing the live `OPENAI_MODEL` value (a Vercel env var whose value is never read/handled here) whether the currently configured model accepts that field, and getting it wrong risks breaking calls that currently work.
 
-**Not independently unit-tested**, same reason as Known Bug #7 — live HTTP call, no test file. Verify with another scan: OpenAI should either return real text for every prompt, or show up in the skip banner/logs if it's still hitting the token ceiling (in which case 800 needs raising further, or the fix needs the `reasoning: {effort: "minimal"}` approach after confirming the configured model supports it).
+**Confirmed working 2026-08-02.** Next scan came back with all 6 engines returning real data (6/30 mentions, no skip banner, no gaps in `answers`) — ChatGPT included.
 
 **Related gap, not fixed here:** there is currently no UI anywhere in the app to view an answer's raw text — not in Prompts, not in Reports. The only way to see what an engine actually said is a direct Supabase query. Worth a future "expand row" or dedicated Answers view if this kind of debugging keeps coming up.
 
