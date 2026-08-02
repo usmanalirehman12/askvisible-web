@@ -156,3 +156,4 @@ These are standing instructions, not one-off notes.
 - **Verify the artifact, not the build.** A green build says the code compiled, not that
   the change shipped. Fetch the deployed asset and grep for something unique to the change.
 - **Production deploys come from `git push`.** Never `vercel --prod` from a dirty tree.
+- **Give step-by-step instructions for anything manual.** Numbered, concrete steps — not a vague pointer to a tab or section that might not exist.

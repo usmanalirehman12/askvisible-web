@@ -91,7 +91,18 @@ export function configuredProviders(): Provider[] {
   const providers: Provider[] = [];
   if (process.env.OPENAI_API_KEY) {
     const model = process.env.OPENAI_MODEL || "gpt-5.6-luna";
-    providers.push({ name: "openai", model, async run(prompt) { const started=Date.now(); const d=await postJson("https://api.openai.com/v1/responses",{method:"POST",headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({model,instructions:SYSTEM,input:prompt,max_output_tokens:400})}); const text=d.output_text || d.output?.flatMap((o:any)=>o.content||[]).filter((c:any)=>c.type==="output_text").map((c:any)=>c.text).join("\n") || ""; return answer("openai",model,prompt,text,[],d.usage,started); } });
+    providers.push({ name: "openai", model, async run(prompt) {
+      const started=Date.now();
+      const d=await postJson("https://api.openai.com/v1/responses",{method:"POST",headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({model,instructions:SYSTEM,input:prompt,max_output_tokens:800})});
+      const text=d.output_text || d.output?.flatMap((o:any)=>o.content||[]).filter((c:any)=>c.type==="output_text").map((c:any)=>c.text).join("\n") || "";
+      // Reasoning-capable models can spend the whole max_output_tokens budget on internal
+      // reasoning and return status "incomplete" with zero visible text -- still a 200, so
+      // postJson treats it as success. Left unchecked this silently stores an empty answer as
+      // "brand not mentioned" instead of surfacing as a provider failure (seen in prod: two
+      // prompts in one scan came back with raw_answer "" and brand_mentioned false).
+      if (!text && d.status === "incomplete") throw new Error(`OpenAI returned no text (${d.incomplete_details?.reason || "incomplete"}).`);
+      return answer("openai",model,prompt,text,[],d.usage,started);
+    } });
   }
   if (process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     const key=process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY; const preferred=process.env.GEMINI_MODEL || "gemini-3.6-flash";
