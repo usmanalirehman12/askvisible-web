@@ -235,6 +235,9 @@ User noticed ChatGPT at 0% and, per the new step-by-step-instructions convention
 
 **Related gap, not fixed here:** there is currently no UI anywhere in the app to view an answer's raw text — not in Prompts, not in Reports. The only way to see what an engine actually said is a direct Supabase query. Worth a future "expand row" or dedicated Answers view if this kind of debugging keeps coming up.
 
+### 9. One-off provider timeouts — hardened, not really a "bug" (2026-08-02)
+A single Gemini call hit its 12s timeout in an otherwise-clean scan (39/40 calls succeeded). Not a repeat of #7/#8 — no config error, just an isolated slow response. But it surfaced that `gemini`, `openai`, `anthropic`, and `perplexity` all called `postJson` with the default `attempts=1` — one slow response and the call just fails, no retry. `deepseek` was already the one exception, requesting 2 attempts. `postJson`'s retry (backoff + jitter) already existed; it just wasn't being asked for. Matched `deepseek`'s pattern for the other four. Worst case for 2 attempts at the 12s default timeout is ~25s, under the Edge function's 30s ceiling, same margin `deepseek` already runs with in production.
+
 ---
 
 ## Working conventions (standing instructions)

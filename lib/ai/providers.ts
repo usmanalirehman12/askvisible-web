@@ -93,7 +93,7 @@ export function configuredProviders(): Provider[] {
     const model = process.env.OPENAI_MODEL || "gpt-5.6-luna";
     providers.push({ name: "openai", model, async run(prompt) {
       const started=Date.now();
-      const d=await postJson("https://api.openai.com/v1/responses",{method:"POST",headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({model,instructions:SYSTEM,input:prompt,max_output_tokens:800})});
+      const d=await postJson("https://api.openai.com/v1/responses",{method:"POST",headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({model,instructions:SYSTEM,input:prompt,max_output_tokens:800})},2);
       const text=d.output_text || d.output?.flatMap((o:any)=>o.content||[]).filter((c:any)=>c.type==="output_text").map((c:any)=>c.text).join("\n") || "";
       // Reasoning-capable models can spend the whole max_output_tokens budget on internal
       // reasoning and return status "incomplete" with zero visible text -- still a 200, so
@@ -106,15 +106,15 @@ export function configuredProviders(): Provider[] {
   }
   if (process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     const key=process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY; const preferred=process.env.GEMINI_MODEL || "gemini-3.6-flash";
-    providers.push({ name:"gemini",model:preferred,async run(prompt){const started=Date.now();const {model,ver}=await geminiEndpoint(key!,preferred);const d=await postJson(`https://generativelanguage.googleapis.com/${ver}/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({contents:[{role:"user",parts:[{text:SYSTEM+"\n\n"+prompt}]}],generationConfig:{maxOutputTokens:400}})});const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("gemini",model,prompt,text,[],d.usageMetadata,started)}});
+    providers.push({ name:"gemini",model:preferred,async run(prompt){const started=Date.now();const {model,ver}=await geminiEndpoint(key!,preferred);const d=await postJson(`https://generativelanguage.googleapis.com/${ver}/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":key!,"Content-Type":"application/json"},body:JSON.stringify({contents:[{role:"user",parts:[{text:SYSTEM+"\n\n"+prompt}]}],generationConfig:{maxOutputTokens:400}})},2);const text=d.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||"").join("\n")||"";return answer("gemini",model,prompt,text,[],d.usageMetadata,started)}});
   }
   if (process.env.PERPLEXITY_API_KEY) {
     const model=process.env.PERPLEXITY_MODEL || "sonar";
-    providers.push({name:"perplexity",model,async run(prompt){const started=Date.now();const d=await postJson("https://api.perplexity.ai/chat/completions",{method:"POST",headers:{Authorization:`Bearer ${process.env.PERPLEXITY_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({model,messages:[{role:"system",content:SYSTEM},{role:"user",content:prompt}],max_tokens:400})});return answer("perplexity",model,prompt,d.choices?.[0]?.message?.content||"",d.citations||[],d.usage,started)}});
+    providers.push({name:"perplexity",model,async run(prompt){const started=Date.now();const d=await postJson("https://api.perplexity.ai/chat/completions",{method:"POST",headers:{Authorization:`Bearer ${process.env.PERPLEXITY_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({model,messages:[{role:"system",content:SYSTEM},{role:"user",content:prompt}],max_tokens:400})},2);return answer("perplexity",model,prompt,d.choices?.[0]?.message?.content||"",d.citations||[],d.usage,started)}});
   }
   if (process.env.ANTHROPIC_API_KEY) {
     const model=process.env.ANTHROPIC_MODEL || "claude-haiku-4-5";
-    providers.push({name:"anthropic",model,async run(prompt){const started=Date.now();const d=await postJson("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"x-api-key":process.env.ANTHROPIC_API_KEY!,"anthropic-version":"2023-06-01","Content-Type":"application/json"},body:JSON.stringify({model,system:SYSTEM,max_tokens:400,messages:[{role:"user",content:prompt}]})});const text=d.content?.filter((c:any)=>c.type==="text").map((c:any)=>c.text).join("\n")||"";return answer("anthropic",model,prompt,text,[],d.usage,started)}});
+    providers.push({name:"anthropic",model,async run(prompt){const started=Date.now();const d=await postJson("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"x-api-key":process.env.ANTHROPIC_API_KEY!,"anthropic-version":"2023-06-01","Content-Type":"application/json"},body:JSON.stringify({model,system:SYSTEM,max_tokens:400,messages:[{role:"user",content:prompt}]})},2);const text=d.content?.filter((c:any)=>c.type==="text").map((c:any)=>c.text).join("\n")||"";return answer("anthropic",model,prompt,text,[],d.usage,started)}});
   }
   if (process.env.DEEPSEEK_API_KEY) {
     const model=process.env.DEEPSEEK_MODEL||"deepseek-chat";
