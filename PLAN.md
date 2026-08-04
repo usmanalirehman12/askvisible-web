@@ -142,12 +142,32 @@ schema, so guessing them would mean rework.
 | 1–4 | Fixes RLS, weak prompts, brand profile save, prompts edit UI | Resolved |
 
 **#7 setup — run this before clicking "Run Audit" in production:**
-1. Open the Supabase dashboard for this project → SQL Editor.
-2. Open [`supabase/schema.sql`](supabase/schema.sql) in this repo and copy the `seo_audits` table definition, its index, and the two `seo_audits` RLS policies (search the file for `seo_audits`).
-3. Paste into a new SQL Editor query and run it.
-4. Confirm: `select * from seo_audits limit 1;` should return zero rows, not an error.
+1. Open the Supabase dashboard for this project → SQL Editor → New query.
+2. Paste and run:
+   ```sql
+   create table public.seo_audits (
+     id uuid primary key default uuid_generate_v4(),
+     brand_id uuid not null references public.brands(id) on delete cascade,
+     domain text not null,
+     checks jsonb not null default '[]',
+     overall_score integer not null default 0,
+     created_at timestamptz not null default now()
+   );
+   create index seo_audits_brand_created_idx on public.seo_audits (brand_id, created_at desc);
 
-Until this runs, the SEO Audit tab and the report's embedded audit section degrade
+   alter table public.seo_audits enable row level security;
+
+   create policy "members read seo_audits" on public.seo_audits for select using (exists(select 1 from public.brands b where b.id = seo_audits.brand_id and public.is_workspace_member(b.workspace_id)));
+   create policy "members manage seo_audits" on public.seo_audits for all using (exists(select 1 from public.brands b where b.id = seo_audits.brand_id and public.is_workspace_member(b.workspace_id))) with check (exists(select 1 from public.brands b where b.id = seo_audits.brand_id and public.is_workspace_member(b.workspace_id)));
+   ```
+3. Confirm: `select * from seo_audits limit 1;` should return zero rows, not an error.
+4. Go to AI Fixes → SEO Audit → click **Run Audit**. Should complete instead of erroring.
+
+Optional on top of this: set `PAGESPEED_API_KEY` in Vercel to enable the Performance and
+Accessibility tabs. Without it those two tabs just say "not configured" instead of showing
+fabricated data — nothing else depends on it.
+
+Until the migration runs, the SEO Audit tab and the report's embedded audit section degrade
 gracefully to "no audit yet" (reads return null, nothing crashes) — only the "Run Audit" /
 "Re-audit" button itself will fail with a clear error until the table exists.
 
