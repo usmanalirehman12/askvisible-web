@@ -445,6 +445,12 @@ td .up,td .down{display:flex;align-items:center}td svg{width:12px}
   body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .rv-header{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .rv-section{page-break-inside:avoid}
+  /* Embedded SEO audit categories are collapsible on-screen but must be complete in
+     exports — force every <details> open regardless of what the viewer collapsed. */
+  .rv-section details{display:block!important}
+  .rv-section details>*{display:block!important}
+  .rv-section summary{cursor:default!important}
+  .rv-section summary::-webkit-details-marker{display:none}
 }
 
 /* Settings */

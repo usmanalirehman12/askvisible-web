@@ -9,12 +9,18 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const brandId = searchParams.get("brandId");
     if (!brandId) return NextResponse.json({ error: "brandId required" }, { status: 400 });
+    const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "50", 10) || 50, 1), 100);
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
 
-    // Get all answers for this brand across all runs via prompts join
+    // scan_runs has no brand_id of its own (brand association is only reachable via
+    // answers.prompt_id -> prompts.brand_id), so finding "the most recent N runs" still
+    // means scanning every answer row for this brand to recover run_ids -- there's no
+    // index-bounded way to do that without a Postgres function. What `limit` does bound
+    // is the expensive part: the full per-answer payload and the score() computation
+    // below, which used to run over every run this brand has ever had, unbounded.
     const { data: allAnswers } = await supabase
       .from("answers")
       .select("run_id, brand_mentioned, position, sentiment, prompts!inner(brand_id)")
@@ -22,7 +28,6 @@ export async function GET(request: Request) {
 
     if (!allAnswers?.length) return NextResponse.json({ history: [] });
 
-    // Group by run_id
     const byRun = new Map<string, typeof allAnswers>();
     for (const a of allAnswers) {
       const list = byRun.get(a.run_id) ?? [];
@@ -30,15 +35,17 @@ export async function GET(request: Request) {
       byRun.set(a.run_id, list);
     }
 
-    // Fetch run metadata for all run_ids
     const runIds = [...byRun.keys()];
-    const { data: runs } = await supabase
+    const { data: allRuns } = await supabase
       .from("scan_runs")
       .select("id, completed_at, confidence")
       .in("id", runIds)
-      .order("completed_at", { ascending: true });
+      .order("completed_at", { ascending: false })
+      .limit(limit);
 
-    const history = (runs || []).map(run => {
+    const runs = (allRuns || []).slice().reverse();
+
+    const history = runs.map(run => {
       const answers = byRun.get(run.id) || [];
       const analyzed = answers.map(a => ({ mentioned: a.brand_mentioned, position: a.position, sentiment: a.sentiment })) as any[];
       const runScore = score(analyzed);

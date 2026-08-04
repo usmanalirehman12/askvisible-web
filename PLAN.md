@@ -4,7 +4,7 @@ Working plan for the product. Detailed history, architectural decisions and debu
 notes live in [`.claude/session_notes.md`](.claude/session_notes.md); this file is the
 short version: what's done, what's next, and why.
 
-Last updated: 2026-08-02 (team migration run, stale Vercel projects deleted)
+Last updated: 2026-08-04 (Reports/SEO Audit/Traffic upgrade — code shipped, migration needs to be run)
 
 ---
 
@@ -15,19 +15,19 @@ weeks; "delete stale Vercel projects" is one row and five minutes. Read the size
 in the backlog before reading anything into the percentage.
 
 ```
-Product features    ████████████████████████░░  15 / 16   94%
+Product features    ████████████████████████░░  16 / 17   94%
 Engineering health  ██████████████████████████   7 / 7    100%
 Known debt          ██████████████████████████   3 / 3    100%
 ────────────────────────────────────────────────────────────
-Overall             █████████████████████████░  25 / 26    96%
+Overall             █████████████████████████░  26 / 27    96%
 ```
 
 | Area | Done | Open |
 |---|---:|---:|
-| Product features | 15 | 1 |
+| Product features | 16 | 1 |
 | Engineering health | 7 | 0 |
 | Known debt | 3 | 0 |
-| **Total** | **25** | **1** |
+| **Total** | **26** | **1** |
 
 Only billing is left, and it needs your Stripe account and real pricing. Everything I can
 build without you is built.
@@ -51,6 +51,7 @@ build without you is built.
 | 13 | Score-drop email alerts | Resend, fires on a 10+ point fall vs the previous scan |
 | 14 | Team members | Invite by email with roles, accept flow, revoke and remove |
 | 15 | Multi-workspace switching | Sidebar switcher; appears only for people in 2+ workspaces |
+| 16 | Reports, SEO Audit & Traffic upgrade | Timestamps everywhere; GSC 7/30/90-day + custom date ranges; 10-tab SEO audit (incl. Google PageSpeed Insights); reports embed the full audit + traffic + a historical score-trend chart. Detail in `.claude/session_notes.md`. **Needs the `seo_audits` migration run manually — see Known debt #7.** |
 
 ### Shipped — engineering health
 
@@ -137,7 +138,18 @@ schema, so guessing them would mean rework.
 |---|---|---|
 | 5 | `scan_frequency` / `scan_day` missing from `schema.sql` | **Open** — item 1 above |
 | 6 | GSC migration must be run manually | Open by design; documented in `schema.sql` |
+| 7 | `seo_audits` migration must be run manually | **Open** — same pattern as #6, see below |
 | 1–4 | Fixes RLS, weak prompts, brand profile save, prompts edit UI | Resolved |
+
+**#7 setup — run this before clicking "Run Audit" in production:**
+1. Open the Supabase dashboard for this project → SQL Editor.
+2. Open [`supabase/schema.sql`](supabase/schema.sql) in this repo and copy the `seo_audits` table definition, its index, and the two `seo_audits` RLS policies (search the file for `seo_audits`).
+3. Paste into a new SQL Editor query and run it.
+4. Confirm: `select * from seo_audits limit 1;` should return zero rows, not an error.
+
+Until this runs, the SEO Audit tab and the report's embedded audit section degrade
+gracefully to "no audit yet" (reads return null, nothing crashes) — only the "Run Audit" /
+"Re-audit" button itself will fail with a clear error until the table exists.
 
 ---
 

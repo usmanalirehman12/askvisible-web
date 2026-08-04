@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { score } from "@/lib/ai/scoring";
+import { getLatestAuditWithTrend } from "@/lib/seo/latestAudit";
+import { fetchGscTraffic, type GscTraffic } from "@/lib/gsc/metrics";
 
 export const runtime = "edge";
 
@@ -22,33 +24,40 @@ export async function GET(request: Request, { params }: { params: { runId: strin
 
   const { data: rawAnswers } = await supabase
     .from("answers")
-    .select("id, engine, raw_answer, brand_mentioned, position, sentiment, created_at, prompts(query, brand_id, brands(id, name, domain))")
+    .select("id, engine, raw_answer, brand_mentioned, position, sentiment, created_at, prompts(query, brand_id, brands(id, name, domain, workspace_id))")
     .eq("run_id", runId);
 
   if (!rawAnswers?.length) return NextResponse.json({ error: "No data for this run" }, { status: 404 });
 
   const firstAnswer = rawAnswers[0] as any;
   const brandId = firstAnswer.prompts?.brand_id;
-  const brand = firstAnswer.prompts?.brands || { name: "Unknown", domain: "" };
+  const brandRow = firstAnswer.prompts?.brands;
+  const brand = brandRow || { name: "Unknown", domain: "" };
 
   const analyzed = rawAnswers.map(a => ({ mentioned: a.brand_mentioned, position: a.position, sentiment: a.sentiment })) as any[];
   const runScore = score(analyzed);
   const mentions = rawAnswers.filter(a => a.brand_mentioned).length;
 
   let fixes: any[] = [];
+  let seoAudit: Awaited<ReturnType<typeof getLatestAuditWithTrend>> = { audit: null, previousAudit: null };
+  let traffic: GscTraffic = { connected: false };
+
   if (brandId) {
-    const { data: fixRows } = await supabase
-      .from("fixes")
-      .select("id, category, title, rationale, impact_low, impact_high, status")
-      .eq("brand_id", brandId)
-      .order("created_at", { ascending: false })
-      .limit(8);
-    fixes = fixRows || [];
+    const [fixRows, auditResult, trafficResult] = await Promise.all([
+      supabase.from("fixes").select("id, category, title, rationale, impact_low, impact_high, status, created_at").eq("brand_id", brandId).order("created_at", { ascending: false }).limit(8),
+      getLatestAuditWithTrend(supabase, brandId),
+      brandRow?.workspace_id
+        ? fetchGscTraffic(supabase, brandRow.workspace_id, brand.domain, "30d", null, null).catch(() => ({ connected: false }) as GscTraffic)
+        : Promise.resolve({ connected: false } as GscTraffic),
+    ]);
+    fixes = fixRows.data || [];
+    seoAudit = auditResult;
+    traffic = trafficResult;
   }
 
   return NextResponse.json({
     run: { id: run.id, completedAt: run.completed_at, confidence: run.confidence, score: runScore, mentions, total: rawAnswers.length },
-    brand,
+    brand: { name: brand.name, domain: brand.domain },
     answers: rawAnswers.map((a: any) => ({
       id: a.id,
       engine: a.engine,
@@ -59,6 +68,8 @@ export async function GET(request: Request, { params }: { params: { runId: strin
       createdAt: a.created_at,
       prompt: a.prompts?.query || "—"
     })),
-    fixes
+    fixes,
+    seoAudit,
+    traffic,
   });
 }

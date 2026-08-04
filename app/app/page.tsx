@@ -8,6 +8,10 @@ import { supabaseConfigured } from "@/lib/supabase/config";
 import type { Brand, Competitor, Fix, Prompt, WorkspaceContext } from "@/lib/data/types";
 import type { ScanAnswerRow, ShareOfVoiceRow } from "@/lib/data/stats";
 import { summarizeScan } from "@/lib/data/stats";
+import { formatTimestamp } from "@/lib/format/datetime";
+import { compareToPrevious } from "@/lib/data/reportComparison";
+import Tabs, { TabPanel } from "@/app/components/Tabs";
+import ScoreTrendChart from "@/app/components/ScoreTrendChart";
 
 const engines=[{name:"ChatGPT",short:"G",color:"green"},{name:"Gemini",short:"◆",color:"blue"},{name:"Perplexity",short:"P",color:"teal"},{name:"Claude",short:"C",color:"orange"},{name:"DeepSeek",short:"D",color:"crimson"},{name:"AI Overviews",short:"◈",color:"cobalt"}];
 const engineByKey:Record<string,{name:string;short:string;color:string}>={openai:engines[0],gemini:engines[1],perplexity:engines[2],anthropic:engines[3],deepseek:engines[4],ai_overviews:engines[5]};
@@ -261,8 +265,8 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
 
  const summary=summarizeScan(latest);
  const byEngine=groupByEngine(latest.answers);
- const prevScan=history.length>=2?history[history.length-2]:null;
- const delta=prevScan!=null?summary.score-prevScan.score:null;
+ const cmp=compareToPrevious(history,latest.runId);
+ const delta=cmp.absoluteDelta;
  const sparkData=history.map(h=>({score:h.score,date:h.completedAt||""}));
 
  return <>{header}{tabBar}
@@ -271,7 +275,7 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
    <div className="stats-grid">
     <Stat label="Total mentions" value={String(summary.mentions)} sub={`of ${summary.total} answers checked`} icon={Activity}/>
     <Stat label="Average position" value={summary.avgPosition!=null?`#${summary.avgPosition}`:"—"} sub="when mentioned" icon={Target}/>
-    <Stat label="Scans run" value={String(history.length||1)} sub={history.length>1?`first scan ${new Date(history[0]?.completedAt||"").toLocaleDateString()}`:"baseline scan"} icon={Search}/>
+    <Stat label="Scans run" value={String(history.length||1)} sub={history.length>1?`first scan ${formatTimestamp(history[0]?.completedAt)}`:"baseline scan"} icon={Search}/>
     <Stat label="AI engines" value="6" sub="ChatGPT · Gemini · Perplexity · Claude · DeepSeek · AI Overviews" icon={BarChart3}/>
    </div>
    <div className="dashboard-grid">
@@ -296,29 +300,64 @@ function groupByEngine(answers:ScanAnswerRow[]){
 const ENG_KEY_MAP:Record<string,string>={ChatGPT:"openai",Gemini:"gemini",Perplexity:"perplexity",Claude:"anthropic",DeepSeek:"deepseek","AI Overviews":"ai_overviews"};
 function fmtNum(n:number){if(n>=1_000_000)return(n/1_000_000).toFixed(1)+"M";if(n>=1_000)return(n/1_000).toFixed(0)+"K";return n.toString()}
 
-type GscData={connected:boolean;propertyUrl?:string;overview:{impressions:number;clicks:number;ctr:number;position:number};queries:{query:string;impressions:number;clicks:number;ctr:number;position:number}[];trend:{date:string;impressions:number;clicks:number}[]};
+type GscData={connected:boolean;propertyUrl?:string;overview?:{impressions:number;clicks:number;ctr:number;position:number};queries?:{query:string;impressions:number;clicks:number;ctr:number;position:number}[];trend?:{date:string;impressions:number;clicks:number}[];range?:{start:string;end:string};fetchedAt?:string};
+type GscRange="7d"|"30d"|"90d"|"custom";
+const GSC_RANGES:{id:GscRange;label:string}[]=[{id:"7d",label:"7 days"},{id:"30d",label:"30 days"},{id:"90d",label:"90 days"},{id:"custom",label:"Custom"}];
 
 function GscTrafficTab({demo,brandId}:{demo:boolean;brandId?:string}){
  const [status,setStatus]=useState<"idle"|"loading"|"connected"|"disconnected"|"error">("idle");
- const [data,setData]=useState<GscData|null>(null);
+ const [range,setRange]=useState<GscRange>("30d");
+ const [customStart,setCustomStart]=useState("");
+ const [customEnd,setCustomEnd]=useState("");
+ // Session-level cache, one entry per distinct range: switching between 7d/30d/90d (or
+ // back to a custom range already fetched) re-renders from memory instead of re-hitting
+ // Search Console. Clears on disconnect and on brand switch (fresh brandId -> fresh Map).
+ const [cache,setCache]=useState<Map<string,GscData>>(new Map());
  const [disconnecting,setDisconnecting]=useState(false);
  const [retryKey,setRetryKey]=useState(0);
+
+ const cacheKey=range==="custom"?`custom:${customStart}:${customEnd}`:range;
+ const data=cache.get(cacheKey)||null;
+ const customIncomplete=range==="custom"&&(!customStart||!customEnd);
+
+ useEffect(()=>{setCache(new Map())},[demo,brandId]);
+
  useEffect(()=>{
   if(demo||!brandId){setStatus("disconnected");return}
+  if(customIncomplete)return;
+  if(cache.has(cacheKey)){setStatus("connected");return}
   setStatus("loading");
-  fetch(`/api/gsc/metrics?brandId=${brandId}`)
+  const params=new URLSearchParams({brandId,range});
+  if(range==="custom"){params.set("start",customStart);params.set("end",customEnd)}
+  fetch(`/api/gsc/metrics?${params.toString()}`)
    .then(r=>r.json())
-   .then((d:GscData)=>{if(d.connected){setData(d);setStatus("connected")}else setStatus("disconnected")})
+   .then((d:GscData)=>{if(d.connected){setCache(prev=>new Map(prev).set(cacheKey,d));setStatus("connected")}else setStatus("disconnected")})
    .catch(()=>setStatus("error"));
- },[demo,brandId,retryKey]);
+ // cache intentionally excluded: it's read (cache.has) to skip a redundant fetch, but
+ // only ever written as a RESULT of this effect running, so including it would re-run
+ // the effect it just finished.
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[demo,brandId,range,customStart,customEnd,retryKey,cacheKey,customIncomplete]);
+
  async function disconnect(){
   if(!brandId)return;
   setDisconnecting(true);
-  try{await fetch(`/api/gsc/disconnect?brandId=${brandId}`,{method:"DELETE"});setStatus("disconnected");setData(null)}
+  try{await fetch(`/api/gsc/disconnect?brandId=${brandId}`,{method:"DELETE"});setStatus("disconnected");setCache(new Map())}
   finally{setDisconnecting(false)}
  }
- if(status==="loading")return <div style={{padding:"48px",textAlign:"center",color:"var(--muted)"}}><LoaderCircle size={24} style={{animation:"spin 1s linear infinite",display:"inline-block"}}/><p style={{marginTop:"12px",fontSize:"13px"}}>Loading Search Console data…</p></div>;
- if(status==="error")return <article className="panel" style={{padding:"40px",textAlign:"center"}}><AlertCircle size={28} color="var(--cr)"/><p style={{marginTop:"12px",fontSize:"14px",color:"var(--ink)"}}>Failed to load Search Console data</p><button className="button outline" style={{marginTop:"16px"}} onClick={()=>setRetryKey(k=>k+1)}>Retry</button></article>;
+
+ const rangePicker=!demo&&brandId&&status!=="disconnected"?<div style={{display:"flex",gap:"6px",alignItems:"center",flexWrap:"wrap",marginBottom:"14px"}}>
+  {GSC_RANGES.map(r=><button key={r.id} className={range===r.id?"button":"button outline"} style={{fontSize:"12px",padding:"6px 12px"}} onClick={()=>setRange(r.id)}>{r.label}</button>)}
+  {range==="custom"&&<span style={{display:"flex",gap:"6px",alignItems:"center",marginLeft:"4px"}}>
+   <input type="date" value={customStart} max={customEnd||undefined} onChange={e=>setCustomStart(e.target.value)} style={{fontSize:"12px",padding:"5px 8px",borderRadius:"6px",border:"1px solid var(--line)",background:"var(--surface)",color:"var(--ink)"}}/>
+   <span style={{fontSize:"12px",color:"var(--muted)"}}>to</span>
+   <input type="date" value={customEnd} min={customStart||undefined} max={new Date().toISOString().split("T")[0]} onChange={e=>setCustomEnd(e.target.value)} style={{fontSize:"12px",padding:"5px 8px",borderRadius:"6px",border:"1px solid var(--line)",background:"var(--surface)",color:"var(--ink)"}}/>
+  </span>}
+ </div>:null;
+
+ if(customIncomplete)return <>{rangePicker}<p style={{fontSize:"12px",color:"var(--muted)",padding:"8px 2px"}}>Pick a start and end date to see custom-range traffic.</p></>;
+ if(status==="loading")return <>{rangePicker}<div style={{padding:"48px",textAlign:"center",color:"var(--muted)"}}><LoaderCircle size={24} className="spin" style={{display:"inline-block"}}/><p style={{marginTop:"12px",fontSize:"13px"}}>Loading Search Console data…</p></div></>;
+ if(status==="error")return <>{rangePicker}<article className="panel" style={{padding:"40px",textAlign:"center"}}><AlertCircle size={28} color="var(--cr)"/><p style={{marginTop:"12px",fontSize:"14px",color:"var(--ink)"}}>Failed to load Search Console data</p><button className="button outline" style={{marginTop:"16px"}} onClick={()=>setRetryKey(k=>k+1)}>Retry</button></article></>;
  if(status==="disconnected"||status==="idle")return(
   <article className="panel" style={{padding:"56px 32px",textAlign:"center"}}>
    <div style={{width:"60px",height:"60px",borderRadius:"16px",background:"color-mix(in srgb,var(--sky) 12%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px"}}><TrendingUp size={30} color="var(--sky)"/></div>
@@ -330,42 +369,45 @@ function GscTrafficTab({demo,brandId}:{demo:boolean;brandId?:string}){
    <p style={{fontSize:"11px",color:"var(--muted)",marginTop:"16px"}}>Read-only access · you can disconnect any time</p>
   </article>
  );
- if(status==="connected"&&data){
-  const maxImp=Math.max(1,...data.trend.map(t=>t.impressions));
+ if(status==="connected"&&data&&data.overview){
+  const overview=data.overview,queries=data.queries||[],trend=data.trend||[];
+  const maxImp=Math.max(1,...trend.map(t=>t.impressions));
+  const rangeLabel=GSC_RANGES.find(r=>r.id===range)?.label||"selected range";
   return <div>
+   {rangePicker}
    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"12px",marginBottom:"14px"}}>
     <article className="panel" style={{padding:"18px 20px",borderLeft:"4px solid var(--sky)"}}>
      <div style={{fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--muted)",marginBottom:"4px"}}>Impressions</div>
-     <div style={{fontSize:"38px",fontWeight:800,fontFamily:"Outfit,system-ui",color:"var(--sky)",letterSpacing:"-1.5px",lineHeight:1}}>{fmtNum(data.overview.impressions)}</div>
-     <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"4px"}}>last 28 days</div>
+     <div style={{fontSize:"38px",fontWeight:800,fontFamily:"Outfit,system-ui",color:"var(--sky)",letterSpacing:"-1.5px",lineHeight:1}}>{fmtNum(overview.impressions)}</div>
+     <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"4px"}}>last {rangeLabel}</div>
     </article>
     <article className="panel" style={{padding:"18px 20px",borderLeft:"4px solid var(--em)"}}>
      <div style={{fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--muted)",marginBottom:"4px"}}>Clicks</div>
-     <div style={{fontSize:"38px",fontWeight:800,fontFamily:"Outfit,system-ui",color:"var(--em)",letterSpacing:"-1.5px",lineHeight:1}}>{fmtNum(data.overview.clicks)}</div>
-     <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"4px"}}>last 28 days</div>
+     <div style={{fontSize:"38px",fontWeight:800,fontFamily:"Outfit,system-ui",color:"var(--em)",letterSpacing:"-1.5px",lineHeight:1}}>{fmtNum(overview.clicks)}</div>
+     <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"4px"}}>last {rangeLabel}</div>
     </article>
     <article className="panel" style={{padding:"18px 20px"}}>
      <div style={{fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--muted)",marginBottom:"4px"}}>Avg CTR</div>
-     <div style={{fontSize:"38px",fontWeight:800,fontFamily:"Outfit,system-ui",color:"var(--ink)",letterSpacing:"-1.5px",lineHeight:1}}>{data.overview.ctr}%</div>
+     <div style={{fontSize:"38px",fontWeight:800,fontFamily:"Outfit,system-ui",color:"var(--ink)",letterSpacing:"-1.5px",lineHeight:1}}>{overview.ctr}%</div>
      <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"4px"}}>click-through rate</div>
     </article>
     <article className="panel" style={{padding:"18px 20px"}}>
      <div style={{fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--muted)",marginBottom:"4px"}}>Avg Position</div>
-     <div style={{fontSize:"38px",fontWeight:800,fontFamily:"Outfit,system-ui",color:"var(--ink)",letterSpacing:"-1.5px",lineHeight:1}}>#{data.overview.position}</div>
+     <div style={{fontSize:"38px",fontWeight:800,fontFamily:"Outfit,system-ui",color:"var(--ink)",letterSpacing:"-1.5px",lineHeight:1}}>#{overview.position}</div>
      <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"4px"}}>in Google Search</div>
     </article>
    </div>
-   {data.trend.length>0&&<article className="panel" style={{padding:"20px 24px",marginBottom:"14px"}}>
-    <div style={{fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--muted)",marginBottom:"12px"}}>Daily impressions — last 28 days</div>
+   {trend.length>0&&<article className="panel" style={{padding:"20px 24px",marginBottom:"14px"}}>
+    <div style={{fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--muted)",marginBottom:"12px"}}>Daily impressions — last {rangeLabel}</div>
     <div style={{display:"flex",gap:"3px",alignItems:"flex-end",height:"54px"}}>
-     {data.trend.map((t,i)=><div key={i} title={`${t.date}: ${fmtNum(t.impressions)}`}
+     {trend.map((t,i)=><div key={i} title={`${t.date}: ${fmtNum(t.impressions)}`}
       style={{flex:1,background:"var(--sky)",borderRadius:"2px 2px 0 0",opacity:.5+(t.impressions/maxImp)*.5,height:`${Math.max(4,(t.impressions/maxImp)*54)}px`,transition:"height .2s"}}/>)}
     </div>
    </article>}
-   {data.queries.length>0&&<article className="panel" style={{marginBottom:"14px"}}>
-    <div className="panel-head"><div><h3>Top queries</h3><p>Search terms driving the most impressions in the last 28 days</p></div></div>
+   {queries.length>0&&<article className="panel" style={{marginBottom:"14px"}}>
+    <div className="panel-head"><div><h3>Top queries</h3><p>Search terms driving the most impressions in the selected range</p></div></div>
     <div className="table-wrap"><table><thead><tr><th>Query</th><th>Impressions</th><th>Clicks</th><th>CTR</th><th>Avg position</th></tr></thead>
-    <tbody>{data.queries.map((q,i)=><tr key={i}>
+    <tbody>{queries.map((q,i)=><tr key={i}>
      <td style={{maxWidth:"320px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{q.query}</td>
      <td style={{fontVariantNumeric:"tabular-nums"}}>{fmtNum(q.impressions)}</td>
      <td style={{fontVariantNumeric:"tabular-nums"}}>{fmtNum(q.clicks)}</td>
@@ -373,8 +415,8 @@ function GscTrafficTab({demo,brandId}:{demo:boolean;brandId?:string}){
      <td>#{q.position}</td>
     </tr>)}</tbody></table></div>
    </article>}
-   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:"11px",color:"var(--muted)",padding:"0 2px"}}>
-    <span>Connected: {data.propertyUrl}</span>
+   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:"11px",color:"var(--muted)",padding:"0 2px",flexWrap:"wrap",gap:"6px"}}>
+    <span>Connected: {data.propertyUrl}{data.range&&` · ${data.range.start} to ${data.range.end}`}{data.fetchedAt&&` · fetched ${formatTimestamp(data.fetchedAt,"datetime")}`}</span>
     <button onClick={disconnect} disabled={disconnecting} style={{fontSize:"11px",color:"var(--cr)",background:"none",border:"none",cursor:"pointer",padding:"4px 8px",borderRadius:"5px"}}>{disconnecting?"Disconnecting…":"Disconnect GSC"}</button>
    </div>
   </div>;
@@ -565,7 +607,7 @@ function Fixes({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:num
  const pageHeader=<div className="page-title"><div><span className="overline">AI FIX GENERATOR</span><h1>Turn gaps into growth</h1><p>{demo?"Actionable recommendations based on where competitors beat you.":brand?`Recommendations for ${brand.name} from your most recent scan.`:"Add a client and run a scan to generate recommendations."}</p></div></div>;
  const tabBar=<div className="overview-tabs" style={{marginBottom:"14px"}}><button className={fixesTab==="fixes"?"active":""} onClick={()=>setFixesTab("fixes")}><WandSparkles size={14}/>AI Visibility Fixes</button><button className={fixesTab==="seo"?"active":""} onClick={()=>setFixesTab("seo")}><Globe size={14}/>SEO Audit</button></div>;
 
- if(fixesTab==="seo") return <>{pageHeader}{tabBar}<SeoAuditTab demo={demo} domain={demo?"acme.co":(brand?.domain||"")}/></>;
+ if(fixesTab==="seo") return <>{pageHeader}{tabBar}<SeoAuditTab demo={demo} brand={brand}/></>;
 
  if(demo)return <>{pageHeader}{tabBar}<div className="fix-grid">{[{type:"CONTENT",title:"Create an alternatives comparison page",desc:"You're absent from 8 high-intent prompts where direct competitors have detailed comparison pages.",lift:"12–18%",effort:"~25 min",color:"purple"},{type:"AUTHORITY",title:"Earn mentions from 3 cited sources",desc:"These publications appear in 41% of winning answers but don't currently mention Acme.",lift:"8–14%",effort:"~2 hrs",color:"green"},{type:"TECHNICAL",title:"Add SoftwareApplication schema",desc:"Clarify your product category, pricing, features, and reviews for answer engines.",lift:"4–7%",effort:"~10 min",color:"blue"}].map((f,i)=><article className="fix-card" key={f.title}><div><span className={`fix-type ${f.color}`}>{f.type}</span><em>#{i+1}</em></div><span className="big-fix-icon"><WandSparkles/></span><h3>{f.title}</h3><p>{f.desc}</p><div className="lift"><span>Estimated lift<b>{f.lift}</b></span><span>Time to implement<b>{f.effort}</b></span></div><button className="button">Generate fix <Sparkles/></button></article>)}</div></>;
 
@@ -583,83 +625,147 @@ function Fixes({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:num
  </>;
 }
 
-type SeoCheck={id:string;label:string;category:"technical"|"meta"|"content"|"social"|"schema";status:"pass"|"warning"|"fail";message:string;recommendation?:string};
-type SeoAuditResult={checks:SeoCheck[];seoScore:number;domain:string;fetchError:string|null};
+type SeoCheckCategory="technical"|"meta"|"content"|"links"|"schema"|"mobile"|"performance"|"accessibility";
+type IssueTrend="fixed"|"broken"|"unchanged"|null;
+type SeoCheck={id:string;label:string;category:SeoCheckCategory;status:"pass"|"warning"|"fail";message:string;recommendation?:string;trend?:IssueTrend};
+type SeoAuditData={id:string;domain:string;overallScore:number;createdAt:string;checks:SeoCheck[]};
 
-function SeoAuditTab({demo,domain}:{demo:boolean;domain:string}){
- const [audit,setAudit]=useState<SeoAuditResult|null>(null);
- const [loading,setLoading]=useState(false);
- const [error,setError]=useState("");
+// Tab ids double as check categories (see lib/seo/checks.ts) except "overview" and
+// "recommendations", which are computed views over the same check list rather than a
+// stored category. This is the 10-tab layout from the spec, mapped onto what this app
+// can actually measure: the last two (performance/accessibility) only have data once
+// PAGESPEED_API_KEY is configured — otherwise their panels say so honestly instead of
+// showing fabricated scores.
+const SEO_TABS:{id:string;label:string}[]=[
+ {id:"overview",label:"Overview"},{id:"technical",label:"Technical SEO"},{id:"meta",label:"On-page SEO"},{id:"content",label:"Content"},
+ {id:"performance",label:"Performance"},{id:"mobile",label:"Mobile"},{id:"accessibility",label:"Accessibility"},{id:"links",label:"Links"},
+ {id:"schema",label:"Structured Data"},{id:"recommendations",label:"Recommendations"},
+];
+const seoStatusIcon=(s:string)=>s==="pass"?"✓":s==="warning"?"!":"✗";
+const seoStatusBg=(s:string)=>s==="pass"?"var(--em-d,#DCFCE7)":s==="warning"?"var(--am-d,#FEF3C7)":"#FEE2E2";
+const seoStatusColor=(s:string)=>s==="pass"?"var(--em)":s==="warning"?"var(--am)":"var(--cr)";
 
- async function runAudit(){
-  if(!domain){setError("No domain configured. Add a domain in brand settings.");return}
-  setLoading(true);setError("");
-  const r=await fetch(`/api/seo-audit?domain=${encodeURIComponent(domain)}`);
-  const j=await r.json().catch(()=>({}));
-  if(!r.ok||j.error)setError(j.error||"SEO audit failed. Try again.");
-  else setAudit(j);
-  setLoading(false);
- }
-
- if(demo){
-  const da:SeoAuditResult={seoScore:72,domain:"acme.co",fetchError:null,checks:[
-   {id:"https",label:"HTTPS enabled",category:"technical",status:"pass",message:"Site uses HTTPS encryption"},
-   {id:"title",label:"Page title",category:"meta",status:"pass",message:'Title: "Acme Software - AI Workflow Tools" (38 chars)'},
-   {id:"meta_description",label:"Meta description",category:"meta",status:"warning",message:"Found (95 chars)",recommendation:"Description too short — aim for 100–160 characters"},
-   {id:"h1",label:"H1 heading",category:"content",status:"pass",message:"Single H1 tag found ✓"},
-   {id:"h2",label:"H2 subheadings",category:"content",status:"pass",message:"4 H2 headings found"},
-   {id:"og_tags",label:"Open Graph tags",category:"social",status:"warning",message:"og:title ✓  og:description ✓  og:image ✗",recommendation:"Add og:image for better social media previews"},
-   {id:"twitter_card",label:"Twitter/X Card",category:"social",status:"pass",message:"Twitter Card meta tag found"},
-   {id:"canonical",label:"Canonical URL",category:"technical",status:"pass",message:"Canonical tag present"},
-   {id:"schema",label:"Structured data (Schema.org)",category:"schema",status:"fail",message:"No structured data found",recommendation:"Add Schema.org markup (Organization or SoftwareApplication) — AI engines use structured data to cite and understand your brand"},
-   {id:"viewport",label:"Mobile viewport",category:"technical",status:"pass",message:"Viewport meta tag present — mobile-friendly"},
-   {id:"img_alt",label:"Image alt text",category:"content",status:"warning",message:"8/12 images have alt text",recommendation:"Add descriptive alt text to 4 images"},
-  ]};
-  return <SeoAuditResults audit={da}/>;
- }
-
- if(loading)return <div style={{textAlign:"center",padding:"60px 40px"}}><LoaderCircle className="spin" style={{width:"32px",color:"var(--sky)"}}/><p style={{marginTop:"12px",color:"var(--muted)",fontSize:"13px"}}>Auditing {domain}…</p></div>;
- if(error)return <div style={{maxWidth:"480px"}}><div className="checker-error"><AlertCircle/><div><b>Audit failed</b><p>{error}</p></div></div><button className="button" style={{marginTop:"12px"}} onClick={runAudit}>Try again</button></div>;
-
- if(!audit)return <div style={{textAlign:"center",padding:"60px 40px"}}>
-  <Globe style={{width:"40px",color:"var(--faint)",marginBottom:"16px"}}/>
-  <h3 style={{margin:"0 0 8px",font:"700 18px 'Outfit',system-ui",color:"var(--ink)"}}>Technical SEO Audit</h3>
-  <p style={{color:"var(--muted)",fontSize:"13px",maxWidth:"360px",margin:"0 auto 24px",lineHeight:1.6}}>Check your website for SEO issues that impact both traditional search rankings and AI engine visibility — schema, meta tags, content structure, and more.</p>
-  {!domain?<p style={{color:"var(--cr)",fontSize:"12px"}}>No domain configured for this brand.</p>:<button className="button" onClick={runAudit}><Globe size={14}/>Audit {domain}</button>}
+function SeoTrendPill({trend}:{trend?:IssueTrend}){
+ if(!trend||trend==="unchanged")return null;
+ const fixed=trend==="fixed";
+ return <span style={{fontSize:"9px",fontWeight:700,padding:"2px 6px",borderRadius:"4px",background:fixed?"var(--em-d,#DCFCE7)":"#FEE2E2",color:fixed?"var(--em)":"var(--cr)",marginLeft:"7px",textTransform:"uppercase",letterSpacing:".3px"}}>{fixed?"Fixed":"New"}</span>;
+}
+function SeoCheckRow({c}:{c:SeoCheck}){
+ return <div style={{display:"flex",gap:"12px",alignItems:"flex-start",padding:"12px 16px",borderBottom:"1px solid var(--line)"}}>
+  <span style={{fontSize:"10px",fontWeight:800,width:"20px",height:"20px",minWidth:"20px",borderRadius:"50%",background:seoStatusBg(c.status),color:seoStatusColor(c.status),display:"flex",alignItems:"center",justifyContent:"center",marginTop:"1px"}}>{seoStatusIcon(c.status)}</span>
+  <div style={{flex:1}}>
+   <div style={{fontWeight:600,fontSize:"13px",color:"var(--ink)",display:"flex",alignItems:"center",flexWrap:"wrap"}}>{c.label}<SeoTrendPill trend={c.trend}/></div>
+   <div style={{fontSize:"12px",color:"var(--muted)",marginTop:"2px"}}>{c.message}</div>
+   {c.recommendation&&<div style={{fontSize:"11px",color:"var(--sky)",marginTop:"5px",fontWeight:600}}>→ {c.recommendation}</div>}
+  </div>
+  <span style={{fontSize:"10px",fontWeight:700,padding:"2px 7px",borderRadius:"4px",background:seoStatusBg(c.status),color:seoStatusColor(c.status),flexShrink:0,textTransform:"uppercase"}}>{c.status}</span>
  </div>;
-
- return <SeoAuditResults audit={audit} onRerun={runAudit}/>;
 }
 
-function SeoAuditResults({audit,onRerun}:{audit:SeoAuditResult;onRerun?:()=>void}){
- const passed=audit.checks.filter(c=>c.status==="pass").length;
- const warnings=audit.checks.filter(c=>c.status==="warning").length;
- const failed=audit.checks.filter(c=>c.status==="fail").length;
- const scoreColor=audit.seoScore>=70?"var(--em)":audit.seoScore>=50?"var(--am)":"var(--cr)";
- const cats:[SeoCheck["category"],string][]=[["technical","Technical SEO"],["meta","Meta Tags"],["content","Content"],["social","Social & Sharing"],["schema","Structured Data"]];
- const sIcon=(s:string)=>s==="pass"?"✓":s==="warning"?"!":"✗";
- const sBg=(s:string)=>s==="pass"?"var(--em-d,#DCFCE7)":s==="warning"?"var(--am-d,#FEF3C7)":"#FEE2E2";
- const sColor=(s:string)=>s==="pass"?"var(--em)":s==="warning"?"var(--am)":"var(--cr)";
+const DEMO_SEO_AUDIT:SeoAuditData={id:"demo",domain:"acme.co",overallScore:72,createdAt:new Date().toISOString(),checks:[
+ {id:"https",label:"HTTPS enabled",category:"technical",status:"pass",message:"Site uses HTTPS encryption"},
+ {id:"title",label:"Page title",category:"meta",status:"pass",message:'Title: "Acme Software - AI Workflow Tools" (38 chars)'},
+ {id:"meta_description",label:"Meta description",category:"meta",status:"warning",message:"Found (95 chars)",recommendation:"Description too short — aim for 100–160 characters"},
+ {id:"h1",label:"H1 heading",category:"content",status:"pass",message:"Single H1 tag found ✓"},
+ {id:"h2",label:"H2 subheadings",category:"content",status:"pass",message:"4 H2 headings found"},
+ {id:"internal_links",label:"Internal linking",category:"links",status:"warning",message:"3 links found on homepage",recommendation:"Add more internal links to key pages"},
+ {id:"canonical",label:"Canonical URL",category:"technical",status:"pass",message:"Canonical tag present"},
+ {id:"schema",label:"Structured data (Schema.org)",category:"schema",status:"fail",message:"No structured data found",recommendation:"Add Schema.org markup (Organization or SoftwareApplication) — AI engines use structured data to cite and understand your brand"},
+ {id:"viewport",label:"Mobile viewport",category:"mobile",status:"pass",message:"Viewport meta tag present — mobile-friendly"},
+ {id:"img_alt",label:"Image alt text",category:"content",status:"warning",message:"8/12 images have alt text",recommendation:"Add descriptive alt text to 4 images"},
+ {id:"pagespeed_performance",label:"Performance score",category:"performance",status:"warning",message:"68/100 (Google PageSpeed, mobile)",recommendation:"Reduce render-blocking resources and image sizes"},
+ {id:"pagespeed_accessibility",label:"Accessibility score",category:"accessibility",status:"pass",message:"94/100 (Google PageSpeed, mobile)"},
+]};
+
+function SeoAuditTab({demo,brand}:{demo:boolean;brand?:Brand}){
+ const [tab,setTab]=useState("overview");
+ const [audit,setAudit]=useState<SeoAuditData|null>(null);
+ const [loading,setLoading]=useState(!demo);
+ const [running,setRunning]=useState(false);
+ const [error,setError]=useState("");
+
+ async function loadLatest(){
+  if(!brand)return;
+  const r=await fetch(`/api/seo-audit/latest?brandId=${encodeURIComponent(brand.id)}`);
+  const j=await r.json().catch(()=>({}));
+  setAudit(j.audit||null);
+ }
+
+ useEffect(()=>{
+  if(demo||!brand){setLoading(false);return}
+  let cancelled=false;
+  (async()=>{setLoading(true);const r=await fetch(`/api/seo-audit/latest?brandId=${encodeURIComponent(brand.id)}`);const j=await r.json().catch(()=>({}));if(!cancelled){setAudit(j.audit||null);setLoading(false)}})();
+  return ()=>{cancelled=true};
+ },[demo,brand]);
+
+ async function runAudit(){
+  if(!brand)return;
+  setRunning(true);setError("");
+  try{
+   const r=await fetch("/api/seo-audit/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({brandId:brand.id})});
+   const j=await r.json().catch(()=>({}));
+   if(!r.ok)throw new Error(j.error||"Audit failed.");
+   await loadLatest();
+  }catch(err){setError(err instanceof Error?err.message:"Audit failed.")}
+  finally{setRunning(false)}
+ }
+
+ const data=demo?DEMO_SEO_AUDIT:audit;
+
+ if(!demo&&!brand)return <div style={{textAlign:"center",padding:"60px 40px"}}><p style={{color:"var(--muted)",fontSize:"13px"}}>Add a client first to run an SEO audit.</p></div>;
+ if(!demo&&loading)return <div style={{textAlign:"center",padding:"60px 40px"}}><LoaderCircle className="spin" style={{width:"32px",color:"var(--sky)"}}/></div>;
+
+ if(!data)return <div style={{textAlign:"center",padding:"60px 40px"}}>
+  <Globe style={{width:"40px",color:"var(--faint)",marginBottom:"16px"}}/>
+  <h3 style={{margin:"0 0 8px",font:"700 18px 'Outfit',system-ui",color:"var(--ink)"}}>Technical SEO Audit</h3>
+  <p style={{color:"var(--muted)",fontSize:"13px",maxWidth:"420px",margin:"0 auto 24px",lineHeight:1.6}}>Checks technical SEO, on-page metadata, content, links, and structured data — plus real Performance and Accessibility scores from Google PageSpeed Insights where configured.</p>
+  {error&&<div className="checker-error" style={{maxWidth:"420px",margin:"0 auto 16px",textAlign:"left"}}><AlertCircle/><div><b>Audit failed</b><p>{error}</p></div></div>}
+  {!brand?.domain?<p style={{color:"var(--cr)",fontSize:"12px"}}>No domain configured for this brand.</p>:<button className="button" onClick={runAudit} disabled={running}>{running?<LoaderCircle className="spin" size={14}/>:<Globe size={14}/>}{running?"Auditing…":`Audit ${brand.domain}`}</button>}
+ </div>;
+
+ const passed=data.checks.filter(c=>c.status==="pass").length;
+ const warnings=data.checks.filter(c=>c.status==="warning").length;
+ const failed=data.checks.filter(c=>c.status==="fail").length;
+ const scoreColor=data.overallScore>=70?"var(--em)":data.overallScore>=50?"var(--am)":"var(--cr)";
+ const issues=[...data.checks].filter(c=>c.status!=="pass").sort((a,b)=>(a.status==="fail"?0:1)-(b.status==="fail"?0:1));
+ const checksFor=(cat:string)=>data.checks.filter(c=>c.category===cat);
+
  return <div>
   <div style={{display:"grid",gridTemplateColumns:"auto 1fr auto",alignItems:"center",gap:"24px",background:"var(--surface)",border:"1px solid var(--line)",borderRadius:"10px",padding:"20px 24px",marginBottom:"14px",borderLeft:`4px solid ${scoreColor}`}}>
-   <div><div style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",fontWeight:700,letterSpacing:"1px",marginBottom:"4px"}}>SEO Score</div><div style={{fontSize:"52px",fontWeight:800,fontFamily:"Outfit,system-ui",color:scoreColor,letterSpacing:"-2px",lineHeight:1}}>{audit.seoScore}</div></div>
+   <div><div style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",fontWeight:700,letterSpacing:"1px",marginBottom:"4px"}}>SEO Score</div><div style={{fontSize:"52px",fontWeight:800,fontFamily:"Outfit,system-ui",color:scoreColor,letterSpacing:"-2px",lineHeight:1}}>{data.overallScore}</div></div>
    <div style={{display:"flex",gap:"20px",paddingLeft:"8px"}}>
     <div style={{textAlign:"center"}}><div style={{fontSize:"24px",fontWeight:800,fontFamily:"Outfit",color:"var(--em)",letterSpacing:"-1px"}}>{passed}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>Passed</div></div>
     <div style={{textAlign:"center"}}><div style={{fontSize:"24px",fontWeight:800,fontFamily:"Outfit",color:"var(--am)",letterSpacing:"-1px"}}>{warnings}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>Warnings</div></div>
     <div style={{textAlign:"center"}}><div style={{fontSize:"24px",fontWeight:800,fontFamily:"Outfit",color:"var(--cr)",letterSpacing:"-1px"}}>{failed}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>Failed</div></div>
    </div>
-   <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"6px"}}><span style={{fontSize:"12px",color:"var(--muted)"}}>Audited: <b style={{color:"var(--ink)"}}>{audit.domain}</b></span>{onRerun&&<button className="button outline" onClick={onRerun} style={{fontSize:"12px",padding:"6px 12px"}}>Re-audit</button>}</div>
+   <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"6px"}}>
+    <span style={{fontSize:"12px",color:"var(--muted)"}}>Audited: <b style={{color:"var(--ink)"}}>{data.domain}</b></span>
+    <span style={{fontSize:"11px",color:"var(--muted)"}}>{formatTimestamp(data.createdAt,"datetime")}</span>
+    {!demo&&<button className="button outline" onClick={runAudit} disabled={running} style={{fontSize:"12px",padding:"6px 12px"}}>{running?"Auditing…":"Re-audit"}</button>}
+   </div>
   </div>
-  {cats.map(([key,label])=>{const cc=audit.checks.filter(c=>c.category===key);if(!cc.length)return null;return <article key={key} className="panel" style={{marginBottom:"10px"}}>
-   <div className="panel-head"><div><h3>{label}</h3></div></div>
-   <div>{cc.map(c=><div key={c.id} style={{display:"flex",gap:"12px",alignItems:"flex-start",padding:"12px 16px",borderBottom:"1px solid var(--line)"}}>
-    <span style={{fontSize:"10px",fontWeight:800,width:"20px",height:"20px",minWidth:"20px",borderRadius:"50%",background:sBg(c.status),color:sColor(c.status),display:"flex",alignItems:"center",justifyContent:"center",marginTop:"1px"}}>{sIcon(c.status)}</span>
-    <div style={{flex:1}}><div style={{fontWeight:600,fontSize:"13px",color:"var(--ink)"}}>{c.label}</div><div style={{fontSize:"12px",color:"var(--muted)",marginTop:"2px"}}>{c.message}</div>{c.recommendation&&<div style={{fontSize:"11px",color:"var(--sky)",marginTop:"5px",fontWeight:600}}>→ {c.recommendation}</div>}</div>
-    <span style={{fontSize:"10px",fontWeight:700,padding:"2px 7px",borderRadius:"4px",background:sBg(c.status),color:sColor(c.status),flexShrink:0,textTransform:"uppercase"}}>{c.status}</span>
-   </div>)}</div>
-  </article>})}
-  {audit.fetchError&&<p style={{fontSize:"11px",color:"var(--am)",lineHeight:1.5}}>Note: Could not fully fetch {audit.domain} ({audit.fetchError}). Some checks may be incomplete or based on partial data.</p>}
- </div>
+  {error&&<div className="checker-error" style={{marginBottom:"14px"}}><AlertCircle/><div><b>Audit failed</b><p>{error}</p></div></div>}
+  <Tabs tabs={SEO_TABS} active={tab} onChange={setTab}/>
+  <div style={{marginTop:"14px"}}>
+   <TabPanel id="overview" active={tab}>
+    <p style={{fontSize:"13px",color:"var(--muted)",margin:"0 0 14px",lineHeight:1.6}}>{failed>0?`${failed} check${failed!==1?"s":""} need attention, ${warnings} warning${warnings!==1?"s":""} to review.`:warnings>0?`No critical issues — ${warnings} warning${warnings!==1?"s":""} to review.`:"No issues found in this audit."}</p>
+    <article className="panel">{data.checks.map(c=><SeoCheckRow key={c.id} c={c}/>)}</article>
+   </TabPanel>
+   {(["technical","meta","content","performance","mobile","accessibility","links","schema"] as const).map(cat=>
+    <TabPanel key={cat} id={cat} active={tab}>
+     {checksFor(cat).length===0
+      ?<div style={{padding:"32px",textAlign:"center",color:"var(--muted)",fontSize:"13px"}}>No {SEO_TABS.find(t=>t.id===cat)?.label.toLowerCase()} data in this audit{(cat==="performance"||cat==="accessibility")?" — set PAGESPEED_API_KEY in Vercel to enable this.":"."}</div>
+      :<article className="panel">{checksFor(cat).map(c=><SeoCheckRow key={c.id} c={c}/>)}</article>}
+    </TabPanel>
+   )}
+   <TabPanel id="recommendations" active={tab}>
+    {issues.length===0
+     ?<div style={{padding:"32px",textAlign:"center",color:"var(--muted)",fontSize:"13px"}}>Nothing to fix — every check passed.</div>
+     :<article className="panel">{issues.map(c=><SeoCheckRow key={c.id} c={c}/>)}</article>}
+   </TabPanel>
+  </div>
+  {!demo&&<p style={{fontSize:"11px",color:"var(--faint)",marginTop:"14px"}}>Status is compared automatically against your previous audit for this brand — fixed and newly-broken checks are flagged above, no manual tracking needed.</p>}
+ </div>;
 }
 
 // Real mode (demo=false) diverges deliberately from the static demo below: the "Share of AI
@@ -724,7 +830,14 @@ function Competitors({demo,brand}:{demo:boolean;brand?:Brand}){
  </>;
 }
 
-type ReportDetail={run:{id:string;completedAt:string|null;confidence:number|null;score:number;mentions:number;total:number};brand:{name:string;domain:string};answers:{id:string;engine:string;text:string;brand_mentioned:boolean;position:number|null;sentiment:string;createdAt:string|null;prompt:string}[];fixes:{id:string;category:string;title:string;rationale:string|null;impact_low:number|null;impact_high:number|null;status:string}[]};
+type ReportDetail={
+ run:{id:string;completedAt:string|null;confidence:number|null;score:number;mentions:number;total:number};
+ brand:{name:string;domain:string};
+ answers:{id:string;engine:string;text:string;brand_mentioned:boolean;position:number|null;sentiment:string;createdAt:string|null;prompt:string}[];
+ fixes:{id:string;category:string;title:string;rationale:string|null;impact_low:number|null;impact_high:number|null;status:string;created_at?:string}[];
+ seoAudit:{audit:SeoAuditData|null;previousAudit:{id:string;overallScore:number;createdAt:string}|null};
+ traffic:GscData;
+};
 function groupByEngineRaw(answers:{engine:string;brand_mentioned:boolean}[]){const byKey=new Map<string,{mentioned:number;total:number}>();for(const a of answers){const e=byKey.get(a.engine)||{mentioned:0,total:0};e.total++;if(a.brand_mentioned)e.mentioned++;byKey.set(a.engine,e)}return Array.from(byKey.entries()).map(([key,{mentioned,total}])=>{const meta=engineByKey[key]||{name:key,short:key[0]?.toUpperCase()||"?",color:"green"};const pct=total?Math.round(mentioned/total*100):0;return{key,name:meta.name,short:meta.short,color:meta.color,pct}})}
 function Reports({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:number}){
  const history=useScanHistory(demo,brand,refreshKey);
@@ -740,7 +853,7 @@ function Reports({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:n
  const reversed=[...history].reverse();
  return <>{header}
   <div className="report-grid">
-   {reversed.map((h,ri)=>{const origIndex=history.length-1-ri;const isFirst=origIndex===0;const prev=origIndex>0?history[origIndex-1]:null;const delta=prev!=null?h.score-prev.score:null;const dateStr=h.completedAt?new Date(h.completedAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):"Unknown date";const scoreColor=h.score>=70?"var(--em)":h.score>=45?"var(--am)":"var(--cr)";
+   {reversed.map((h,ri)=>{const cmp=compareToPrevious(history,h.runId);const isFirst=cmp.isBaseline;const delta=cmp.absoluteDelta;const dateStr=formatTimestamp(h.completedAt,"datetime");const scoreColor=h.score>=70?"var(--em)":h.score>=45?"var(--am)":"var(--cr)";
    return <article className="panel report-card" key={h.runId} onClick={()=>openReport(h.runId)}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"14px"}}>
      <div><span style={{fontSize:"10px",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",color:"var(--muted)"}}>SCAN #{history.length-ri}</span><p style={{margin:"3px 0 0",fontSize:"12px",color:"var(--muted)"}}>{dateStr}</p></div>
@@ -757,15 +870,58 @@ function Reports({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:n
   {viewRunId&&<ReportViewer runId={viewRunId} report={report} loading={reportLoading} history={history} onClose={closeReport}/>}
  </>;
 }
+const SEO_CATEGORY_LABEL:Record<string,string>={technical:"Technical SEO",meta:"On-page SEO",content:"Content",performance:"Performance",mobile:"Mobile",accessibility:"Accessibility",links:"Links",schema:"Structured Data"};
+// Complete audit embedded in the report, not a summary — <details> makes each category
+// collapsible on-screen; `open` by default so nothing is hidden, and print CSS
+// (globals.css) forces them open regardless of what the viewer collapsed, so the PDF
+// export always has the full audit even if the on-screen state doesn't.
+function ReportSeoAuditSection({seoAudit}:{seoAudit:ReportDetail["seoAudit"]}){
+ const audit=seoAudit?.audit;
+ if(!audit)return <div className="rv-section"><div className="rv-section-title">SEO audit</div><p style={{fontSize:"12px",color:"var(--muted)"}}>No SEO audit has been run for this brand yet — run one from AI Fixes → SEO Audit.</p></div>;
+ const scoreColor=audit.overallScore>=70?"var(--em)":audit.overallScore>=50?"var(--am)":"var(--cr)";
+ const passed=audit.checks.filter(c=>c.status==="pass").length;
+ const warnings=audit.checks.filter(c=>c.status==="warning").length;
+ const failed=audit.checks.filter(c=>c.status==="fail").length;
+ const cats=["technical","meta","content","performance","mobile","accessibility","links","schema"];
+ return <div className="rv-section" style={{pageBreakInside:"avoid"}}>
+  <div className="rv-section-title">SEO audit <span style={{fontWeight:400,fontSize:"11px",color:"var(--muted)",textTransform:"none",letterSpacing:0}}>— {formatTimestamp(audit.createdAt,"datetime")}</span></div>
+  <div style={{display:"flex",alignItems:"center",gap:"16px",marginBottom:"14px",flexWrap:"wrap"}}>
+   <span style={{fontSize:"36px",fontWeight:800,fontFamily:"Outfit,system-ui",color:scoreColor,letterSpacing:"-1.5px"}}>{audit.overallScore}</span>
+   <span style={{fontSize:"12px",color:"var(--muted)"}}>SEO score · {passed} passed, {warnings} warning{warnings!==1?"s":""}, {failed} failed</span>
+  </div>
+  <div style={{display:"grid",gap:"8px"}}>
+   {cats.map(cat=>{const cc=audit.checks.filter(c=>c.category===cat);if(!cc.length)return null;return <details key={cat} open style={{border:"1px solid var(--line)",borderRadius:"8px",overflow:"hidden"}}>
+    <summary style={{padding:"10px 14px",fontSize:"12px",fontWeight:700,color:"var(--ink)",cursor:"pointer"}}>{SEO_CATEGORY_LABEL[cat]} ({cc.length})</summary>
+    <div>{cc.map(c=><SeoCheckRow key={c.id} c={c}/>)}</div>
+   </details>})}
+  </div>
+ </div>;
+}
+function ReportTrafficSection({traffic}:{traffic:ReportDetail["traffic"]}){
+ if(!traffic?.connected||!traffic.overview)return <div className="rv-section"><div className="rv-section-title">Google Search Console traffic</div><p style={{fontSize:"12px",color:"var(--muted)"}}>Connect Google Search Console (Overview → Traffic &amp; Reach) to include traffic data in reports.</p></div>;
+ const o=traffic.overview;
+ return <div className="rv-section" style={{pageBreakInside:"avoid"}}>
+  <div className="rv-section-title">Google Search Console traffic <span style={{fontWeight:400,fontSize:"11px",color:"var(--muted)",textTransform:"none",letterSpacing:0}}>— {traffic.range?`${traffic.range.start} to ${traffic.range.end}`:"last 30 days"}</span></div>
+  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"12px"}}>
+   <div><div style={{fontSize:"10px",color:"var(--muted)",textTransform:"uppercase",fontWeight:700}}>Impressions</div><div style={{fontSize:"22px",fontWeight:800,fontFamily:"Outfit,system-ui",color:"var(--sky)"}}>{fmtNum(o.impressions)}</div></div>
+   <div><div style={{fontSize:"10px",color:"var(--muted)",textTransform:"uppercase",fontWeight:700}}>Clicks</div><div style={{fontSize:"22px",fontWeight:800,fontFamily:"Outfit,system-ui",color:"var(--em)"}}>{fmtNum(o.clicks)}</div></div>
+   <div><div style={{fontSize:"10px",color:"var(--muted)",textTransform:"uppercase",fontWeight:700}}>Avg CTR</div><div style={{fontSize:"22px",fontWeight:800,fontFamily:"Outfit,system-ui",color:"var(--ink)"}}>{o.ctr}%</div></div>
+   <div><div style={{fontSize:"10px",color:"var(--muted)",textTransform:"uppercase",fontWeight:700}}>Avg Position</div><div style={{fontSize:"22px",fontWeight:800,fontFamily:"Outfit,system-ui",color:"var(--ink)"}}>#{o.position}</div></div>
+  </div>
+  {traffic.fetchedAt&&<p style={{fontSize:"10px",color:"var(--faint)",marginTop:"10px"}}>Fetched {formatTimestamp(traffic.fetchedAt,"datetime")}</p>}
+ </div>;
+}
 function ReportViewer({runId,report,loading,history,onClose}:{runId:string;report:ReportDetail|null;loading:boolean;history:ScanHistoryEntry[];onClose:()=>void}){
  function printReport(){window.print()}
  const [expandedId,setExpandedId]=useState<string|null>(null);
- const histIdx=report?history.findIndex(h=>h.runId===runId):-1;
- const isBaseline=histIdx===0;
- const prev=histIdx>0?history[histIdx-1]:null;
- const delta=prev!=null&&report?report.run.score-prev.score:null;
- const dateStr=report?.run.completedAt?new Date(report.run.completedAt).toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"}):"";
+ const histIdx=history.findIndex(h=>h.runId===runId);
+ const prevEntry=histIdx>0?history[histIdx-1]:null;
+ const cmp=report?compareToPrevious(history,runId):null;
+ const isBaseline=cmp?.isBaseline??true;
+ const delta=cmp?.absoluteDelta??null;
+ const dateStr=formatTimestamp(report?.run.completedAt,"datetime");
  const engineBreakdown=report?groupByEngineRaw(report.answers):[];
+ const trendData=history.length>=2?history.map(h=>({label:h.completedAt?new Date(h.completedAt).toLocaleDateString(undefined,{month:"short",day:"numeric"}):"—",value:h.score})):[];
  return <div className="rv-overlay" onClick={onClose}>
   <div className="rv-panel" onClick={e=>e.stopPropagation()}>
    <div className="rv-actions no-print">
@@ -783,7 +939,7 @@ function ReportViewer({runId,report,loading,history,onClose}:{runId:string;repor
      <div style={{display:"flex",alignItems:"flex-start",gap:"32px",flexWrap:"wrap"}}>
       <div>
        {isBaseline&&<span style={{display:"inline-block",marginBottom:"10px",fontSize:"11px",fontWeight:700,padding:"4px 10px",borderRadius:"99px",background:"rgba(245,158,11,.18)",color:"#F59E0B",letterSpacing:".5px"}}>BASELINE SCAN</span>}
-       {!isBaseline&&delta!=null&&<span style={{display:"block",marginBottom:"10px",fontSize:"14px",fontWeight:700,color:delta>=0?"#10B981":"#EF4444"}}>{delta>0?"↑":"↓"}{Math.abs(delta)} pts vs previous scan</span>}
+       {!isBaseline&&delta!=null&&<span style={{display:"block",marginBottom:"10px",fontSize:"14px",fontWeight:700,color:delta>0?"#10B981":delta<0?"#EF4444":"#94A3B8"}}>{delta>0?"↑":delta<0?"↓":"→"}{Math.abs(delta)} pts{cmp?.percentDelta!=null&&` (${cmp.percentDelta>0?"+":""}${cmp.percentDelta}%)`} vs previous scan{cmp?.previous!=null&&` — was ${cmp.previous}${prevEntry?.completedAt?` on ${formatTimestamp(prevEntry.completedAt,"date")}`:""}`}</span>}
        <div style={{fontSize:"10px",fontWeight:700,letterSpacing:"1.5px",textTransform:"uppercase",color:"#475569",marginBottom:"4px"}}>AI VISIBILITY SCORE</div>
        <div style={{fontSize:"96px",fontWeight:800,lineHeight:1,fontFamily:"Outfit,system-ui",color:"#0EA5E9",letterSpacing:"-5px"}}>{report.run.score}</div>
        <div style={{marginTop:"14px",display:"flex",gap:"8px",flexWrap:"wrap"}}>
@@ -798,6 +954,10 @@ function ReportViewer({runId,report,loading,history,onClose}:{runId:string;repor
       </div>
      </div>
     </div>
+    {trendData.length>=2&&<div className="rv-section">
+     <div className="rv-section-title">Score history ({trendData.length} scans)</div>
+     <ScoreTrendChart data={trendData} yMax={100}/>
+    </div>}
     <div className="rv-section">
      <div className="rv-section-title">Visibility by engine</div>
      <div style={{display:"grid",gap:"10px"}}>
@@ -820,7 +980,7 @@ function ReportViewer({runId,report,loading,history,onClose}:{runId:string;repor
       </tr>
       {open&&<tr className="no-print"><td></td><td colSpan={5} style={{background:"var(--soft)",padding:"14px 16px",fontSize:"12px",lineHeight:1.6,color:"var(--ink)",whiteSpace:"pre-wrap"}}>
        {a.text?a.text:<span style={{color:"var(--muted)",fontStyle:"italic"}}>No response text recorded for this answer.</span>}
-       {a.createdAt&&<div style={{marginTop:"10px",fontSize:"11px",color:"var(--muted)"}}>Answered {new Date(a.createdAt).toLocaleString(undefined,{dateStyle:"medium",timeStyle:"short"})}</div>}
+       {a.createdAt&&<div style={{marginTop:"10px",fontSize:"11px",color:"var(--muted)"}}>Answered {formatTimestamp(a.createdAt,"datetime")}</div>}
       </td></tr>}
      </Fragment>})}</tbody></table></div>
     </div>
@@ -830,12 +990,14 @@ function ReportViewer({runId,report,loading,history,onClose}:{runId:string;repor
       {report.fixes.slice(0,6).map(f=><div key={f.id} style={{border:"1px solid var(--line)",borderRadius:"8px",padding:"14px 16px"}}>
        <div style={{display:"flex",gap:"10px",alignItems:"flex-start"}}>
         <span style={{fontSize:"10px",fontWeight:700,padding:"3px 8px",borderRadius:"4px",background:"var(--sky-d,#E0F2FE)",color:"var(--sky)",flexShrink:0,marginTop:"1px"}}>{f.category.toUpperCase()}</span>
-        <div><div style={{fontWeight:700,fontSize:"13px",color:"var(--ink)",marginBottom:"4px"}}>{f.title}</div>{f.rationale&&<div style={{fontSize:"12px",color:"var(--muted)"}}>{f.rationale}</div>}{f.impact_low!=null&&f.impact_high!=null&&<div style={{marginTop:"6px",fontSize:"11px",color:"var(--em)",fontWeight:600}}>Estimated lift: +{f.impact_low}–{f.impact_high}%</div>}</div>
+        <div><div style={{fontWeight:700,fontSize:"13px",color:"var(--ink)",marginBottom:"4px"}}>{f.title}</div>{f.rationale&&<div style={{fontSize:"12px",color:"var(--muted)"}}>{f.rationale}</div>}{f.impact_low!=null&&f.impact_high!=null&&<div style={{marginTop:"6px",fontSize:"11px",color:"var(--em)",fontWeight:600}}>Estimated lift: +{f.impact_low}–{f.impact_high}%</div>}{f.created_at&&<div style={{marginTop:"4px",fontSize:"10px",color:"var(--faint)"}}>{formatTimestamp(f.created_at,"datetime")}</div>}</div>
        </div>
       </div>)}
      </div>
     </div>}
-    <div className="rv-footer"><span style={{fontWeight:700,color:"var(--muted)"}}>a<span style={{color:"var(--sky)"}}>askvisibleai</span></span><span>Generated {new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</span></div>
+    <ReportSeoAuditSection seoAudit={report.seoAudit}/>
+    <ReportTrafficSection traffic={report.traffic}/>
+    <div className="rv-footer"><span style={{fontWeight:700,color:"var(--muted)"}}>a<span style={{color:"var(--sky)"}}>askvisibleai</span></span><span>Generated {formatTimestamp(new Date().toISOString(),"datetime")}</span></div>
    </>}
   </div>
  </div>

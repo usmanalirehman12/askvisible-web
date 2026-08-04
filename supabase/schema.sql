@@ -180,6 +180,22 @@ create table public.gsc_tokens (
   property_url text,
   created_at timestamptz not null default now()
 );
+-- One row per audit run, not per check: checks is a flat jsonb array (each entry carries
+-- its own id/category/status/severity/message/recommendation). Filtering by
+-- severity/status/category happens client-side against this array — cheap at the row
+-- counts a per-brand audit history produces, and it avoids normalizing what's read as a
+-- whole document 99% of the time. overall_score is redundant with checks (derivable by
+-- scanning it) but stored so history/latest queries don't have to unpack jsonb to sort or
+-- display a score.
+create table public.seo_audits (
+  id uuid primary key default uuid_generate_v4(),
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  domain text not null,
+  checks jsonb not null default '[]',
+  overall_score integer not null default 0,
+  created_at timestamptz not null default now()
+);
+create index seo_audits_brand_created_idx on public.seo_audits (brand_id, created_at desc);
 
 alter table public.profiles enable row level security;
 alter table public.workspaces enable row level security;
@@ -194,6 +210,7 @@ alter table public.reports enable row level security;
 alter table public.usage_months enable row level security;
 alter table public.subscriptions enable row level security;
 alter table public.gsc_tokens enable row level security;
+alter table public.seo_audits enable row level security;
 
 create function public.is_workspace_member(target uuid) returns boolean language sql stable security definer set search_path='' as $$
   select exists(select 1 from public.workspace_members m where m.workspace_id=target and m.user_id=auth.uid());
@@ -235,6 +252,8 @@ create policy "members read answers" on public.answers for select using (exists(
 create policy "members manage answers" on public.answers for insert with check (exists(select 1 from public.scan_runs r where r.id = answers.run_id and public.is_workspace_member(r.workspace_id)));
 create policy "members read fixes" on public.fixes for select using (exists(select 1 from public.brands b where b.id = fixes.brand_id and public.is_workspace_member(b.workspace_id)));
 create policy "members manage fixes" on public.fixes for all using (exists(select 1 from public.brands b where b.id = fixes.brand_id and public.is_workspace_member(b.workspace_id))) with check (exists(select 1 from public.brands b where b.id = fixes.brand_id and public.is_workspace_member(b.workspace_id)));
+create policy "members read seo_audits" on public.seo_audits for select using (exists(select 1 from public.brands b where b.id = seo_audits.brand_id and public.is_workspace_member(b.workspace_id)));
+create policy "members manage seo_audits" on public.seo_audits for all using (exists(select 1 from public.brands b where b.id = seo_audits.brand_id and public.is_workspace_member(b.workspace_id))) with check (exists(select 1 from public.brands b where b.id = seo_audits.brand_id and public.is_workspace_member(b.workspace_id)));
 
 -- Workspace bootstrap: every signed-up user needs a profile row and a workspace to attach
 -- brands to before the dashboard means anything. security definer lets this run before the
