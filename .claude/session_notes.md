@@ -1,6 +1,6 @@
 # AskVisibleAI — Session Notes
 
-**Last updated:** 2026-08-06 (Audit trail + AI Fixes progress report, Overview date range, scan confirmation dialog — code shipped, not yet pushed, needs a manual migration)  
+**Last updated:** 2026-08-06 (Audit trail + AI Fixes progress report — migration run, live in production)  
 **Repo:** usmanalirehman12/askvisible-web  
 **Deploy:** https://askvisible-web-mfu2.vercel.app  
 **Local:** `C:\Users\zayns\OneDrive\Documents\websitefixer`  
@@ -461,12 +461,14 @@ counts (4 pending / 2 implementing / 1 done), full timelines, and generated/scan
 clicking the "Done" status pill filters correctly to the one matching fix; "Complete scan
 reports" still renders the original three demo scan cards unchanged.
 
-**Not verified — needs you:** the actual confirmation-dialog appearance and both its button
-paths (this environment can't trigger it — it's gated to real, non-demo accounts, and there's
-no login here); every audit-log insert and the Fixes progress report's real (non-demo) data
-against production, which additionally requires you to run the migration in `PLAN.md` item #7
-first — until then, `logAuditEvent` calls fail silently (by design) and `scan_run_id` stays
-null on every new fix, so "From scan" will read "Not linked to a scan" for everything.
+**Migration run 2026-08-06 (you)** — `audit_log` table + `fixes.scan_run_id` column live in
+production, per `PLAN.md` item #7.
+
+**Not verified — still needs you:** the actual confirmation-dialog appearance and both its
+button paths (this environment can't trigger it — it's gated to real, non-demo accounts, and
+there's no login here); a real, non-demo walkthrough confirming an actual audit-log row gets
+written when you start a scan or change a fix's status, and that a fix generated after the
+migration shows a real "From scan" date instead of "Not linked to a scan."
 
 ---
 
