@@ -44,6 +44,36 @@ describe("analyzeMention", () => {
   it("accepts extra aliases", () => {
     expect(analyzeMention("Everyone just calls it BigCo.", "Big Corporation", "bigcorp.com", ["BigCo"]).mentioned).toBe(true);
   });
+
+  // Regression coverage for the reported bug: sentiment used to scan a ~300-character
+  // window around the mention, so a keyword describing something else entirely -- a
+  // different sentence, the prompt's own phrasing, or a plain "we don't know" answer --
+  // could get misattributed to the brand.
+  it("does not let a keyword in a different sentence bleed into the mention's sentiment", () => {
+    const text = "Rival Co is the best choice for most teams. Acme is a company that exists.";
+    expect(analyzeMention(text, "Acme", "").sentiment).toBe("neutral");
+  });
+
+  it("does not read 'best alternatives to X' as praise of X", () => {
+    // The dominant false-positive pattern for this app: buyer prompts are phrased "best
+    // alternatives to X", and the answer echoes that framing back near the mention.
+    expect(analyzeMention("I'll break down the best alternatives to Acme.", "Acme", "").sentiment).toBe("neutral");
+  });
+
+  it("still reads a keyword genuinely describing the brand after the mention as positive", () => {
+    expect(analyzeMention("Alternatives aside, Acme itself is the best choice here.", "Acme", "").sentiment).toBe("positive");
+  });
+
+  it("treats 'no information about the brand' as neutral even when a keyword appears after the mention in the same sentence", () => {
+    // Without the uncertainty guard, "best" appearing after "Acme" here would otherwise
+    // score positive under the after-mention rule -- the guard must take priority.
+    const text = "I'm not finding substantial information about Acme, which some call the best.";
+    expect(analyzeMention(text, "Acme", "").sentiment).toBe("neutral");
+  });
+
+  it("classifies correctly when the match is via domain/alias rather than the brand name", () => {
+    expect(analyzeMention("Try acme.com — it's the best option.", "Totally Different", "acme.com").sentiment).toBe("positive");
+  });
 });
 
 describe("analyzeCompetitors", () => {
@@ -114,6 +144,12 @@ describe("extractMentionSnippet", () => {
 
   it("matches by domain when the brand name never appears", () => {
     expect(extractMentionSnippet("Try acme.com for this need.", "Totally Different", "acme.com")).toBe("Try acme.com for this need.");
+  });
+
+  it("returns the same sentence analyzeMention classified sentiment from, not a different one", () => {
+    const text = "Rival Co is the best choice for most teams. Acme is a company that exists.";
+    expect(analyzeMention(text, "Acme", "").sentiment).toBe("neutral");
+    expect(extractMentionSnippet(text, "Acme", "")).toBe("Acme is a company that exists.");
   });
 });
 

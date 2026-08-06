@@ -17,21 +17,59 @@ function positionOf(text: string, index: number): number | null {
   return marker ? Number(marker) : null;
 }
 
-function sentimentAround(text: string, index: number, span: number) {
-  const hit = text.slice(Math.max(0, index - 120), index + span + 180).toLowerCase();
-  const negative = /\b(drawback|weak|limited|expensive|poor|avoid|however|but)\b/.test(hit);
-  const positive = /\b(best|leading|strong|excellent|recommend|powerful|ideal|top)\b/.test(hit);
-  return negative && !positive ? "negative" as const : positive ? "positive" as const : "neutral" as const;
+// Shared by sentimentAround (classification) and extractMentionSnippet (display) so what
+// gets scored and what gets shown as "the phrase" are always the same span -- otherwise a
+// keyword three sentences away can drive a classification the displayed quote doesn't
+// support at all.
+function sentenceAround(text: string, index: number, matchEnd: number) {
+  const start = Math.max(0, text.lastIndexOf(".", index) + 1, text.lastIndexOf("\n", index) + 1);
+  const nextPeriod = text.indexOf(".", matchEnd);
+  const end = nextPeriod === -1 ? text.length : nextPeriod + 1;
+  return { start, end, text: text.slice(start, end) };
+}
+
+const NEGATIVE_RE = /\b(drawback|weak|limited|expensive|poor|avoid|however|but)\b/gi;
+const POSITIVE_RE = /\b(best|leading|strong|excellent|recommend|powerful|ideal|top)\b/gi;
+// "Don't have information about X" or "not finding X" is the model saying it doesn't know
+// enough to have an opinion -- treat as neutral regardless of any keyword elsewhere in the
+// sentence (e.g. a nearby "best" describing the alternatives being requested, not X itself).
+const UNCERTAINTY_RE = /\b(not finding|don'?t have (any )?(information|data)|no information (about|on)|not familiar with|unable to find)\b/i;
+
+// Classifies sentiment from only the sentence containing the mention (not a fixed character
+// window -- that let keywords describing a different sentence, a competitor, or the prompt's
+// own phrasing bleed in), and prefers a keyword appearing AFTER the mention (describing the
+// brand, as in "X is the best choice") over one appearing before it (as in "best alternatives
+// to X", which describes the search, not the brand -- the dominant false-positive pattern for
+// this app's "alternatives to X" buyer prompts, where the answer echoes the question's own
+// wording back). A before-only hit is treated as too weak to trust and scored neutral.
+function sentimentAround(text: string, index: number, matchEnd: number) {
+  const sentence = sentenceAround(text, index, matchEnd);
+  if (UNCERTAINTY_RE.test(sentence.text)) return "neutral" as const;
+
+  const relativeMentionEnd = matchEnd - sentence.start;
+  const positiveAfter = matchAfter(POSITIVE_RE, sentence.text, relativeMentionEnd);
+  const negativeAfter = matchAfter(NEGATIVE_RE, sentence.text, relativeMentionEnd);
+  if (positiveAfter || negativeAfter) return negativeAfter && !positiveAfter ? "negative" as const : "positive" as const;
+
+  return "neutral" as const;
+}
+
+function matchAfter(re: RegExp, text: string, afterIndex: number): boolean {
+  re.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) if (m.index >= afterIndex) return true;
+  return false;
 }
 
 export function analyzeMention(text: string, brand: string, domain: string, extraAliases: string[] = []) {
   const matcher = aliasMatcher([brand, domain, domain.split(".")[0], ...extraAliases]);
-  const index = matcher ? text.search(matcher) : -1;
-  if (index < 0) return { mentioned: false as const, position: null, sentiment: "not-mentioned" as const };
+  const match = matcher ? text.match(matcher) : null;
+  if (!match || match.index == null) return { mentioned: false as const, position: null, sentiment: "not-mentioned" as const };
+  const index = match.index;
   return {
     mentioned: true as const,
     position: positionOf(text, index),
-    sentiment: sentimentAround(text, index, brand.length)
+    sentiment: sentimentAround(text, index, index + match[0].length)
   };
 }
 
@@ -64,16 +102,13 @@ export function extractMentionSnippet(text: string, brand: string, domain: strin
   const match = text.match(matcher);
   if (!match || match.index == null) return null;
   const index = match.index;
-  // Search for the closing period starting after the full matched alias, not at its start --
-  // a domain alias (e.g. "acme.com") contains its own period, which would otherwise be
-  // mistaken for the sentence boundary and truncate the snippet mid-domain.
-  const matchEnd = index + match[0].length;
-  // Expand outward to sentence boundaries around the match; fall back to a hard cutoff at
-  // maxLen if the sentence runs long, so one run-on paragraph can't produce an unreadable row.
-  const start = Math.max(0, text.lastIndexOf(".", index) + 1, text.lastIndexOf("\n", index) + 1);
-  const nextPeriod = text.indexOf(".", matchEnd);
-  const end = nextPeriod === -1 || nextPeriod - start > maxLen ? Math.min(text.length, start + maxLen) : nextPeriod + 1;
-  const snippet = text.slice(start, end).trim().replace(/\s+/g, " ");
+  // Same sentence-boundary logic sentimentAround classifies from, so the displayed phrase is
+  // always the exact text a sentiment verdict was drawn from -- never a different sentence.
+  const sentence = sentenceAround(text, index, index + match[0].length);
+  // Hard cutoff at maxLen if the sentence runs long, so one run-on paragraph can't produce
+  // an unreadable row.
+  const capped = sentence.end - sentence.start > maxLen ? text.slice(sentence.start, Math.min(text.length, sentence.start + maxLen)) : sentence.text;
+  const snippet = capped.trim().replace(/\s+/g, " ");
   return snippet || null;
 }
 
