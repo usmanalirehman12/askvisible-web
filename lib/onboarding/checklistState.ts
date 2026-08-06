@@ -64,3 +64,15 @@ export function checklistProgress(steps: ChecklistStep[]): { done: number; total
   const done = steps.filter(s => s.done).length;
   return { done, total: steps.length, complete: done === steps.length };
 }
+
+const NEW_ACCOUNT_WINDOW_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
+
+// A real account-age signal for first-run guidance (per-tab tips), independent of any
+// localStorage flag — a cleared cache or a new device shouldn't make an established account
+// look brand-new again. Invalid/unparseable timestamps are treated as "not new" rather than
+// throwing, since a malformed date is more likely a data issue than an actual new signup.
+export function isNewAccount(workspaceCreatedAt: string, now: number = Date.now()): boolean {
+  const createdAt = new Date(workspaceCreatedAt).getTime();
+  if (Number.isNaN(createdAt)) return false;
+  return now - createdAt < NEW_ACCOUNT_WINDOW_MS;
+}

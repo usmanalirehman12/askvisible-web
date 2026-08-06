@@ -31,8 +31,9 @@ export async function getWorkspaceContext(supabase: SupabaseClient, preferredWor
 
   // One query for every workspace the user belongs to: the switcher needs names for all of
   // them, and it's the same round trip as fetching only the active one.
-  const { data: workspaceRows } = await supabase.from("workspaces").select("id,name,plan").in("id", rows.map(r => r.workspace_id));
+  const { data: workspaceRows } = await supabase.from("workspaces").select("id,name,plan,created_at").in("id", rows.map(r => r.workspace_id));
   const roleById = new Map(rows.map(r => [r.workspace_id, r.role as string]));
+  const createdAtById = new Map((workspaceRows || []).map(w => [w.id as string, w.created_at as string]));
   const workspaces: WorkspaceSummary[] = (workspaceRows || [])
     .map(w => ({ id: w.id as string, name: w.name as string, plan: w.plan as string, role: roleById.get(w.id as string) || "member" }))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -50,6 +51,7 @@ export async function getWorkspaceContext(supabase: SupabaseClient, preferredWor
     plan: workspace.plan,
     role: workspace.role,
     workspaces,
-    brands: (brands as Brand[]) || []
+    brands: (brands as Brand[]) || [],
+    workspaceCreatedAt: createdAtById.get(workspace.id) || new Date(0).toISOString()
   };
 }

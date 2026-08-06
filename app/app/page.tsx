@@ -15,6 +15,8 @@ import ScoreTrendChart from "@/app/components/ScoreTrendChart";
 import EmptyState from "@/app/components/EmptyState";
 import OnboardingChecklist from "@/app/components/OnboardingChecklist";
 import CoachMarkTour from "@/app/components/CoachMarkTour";
+import TabTip from "@/app/components/TabTip";
+import { isNewAccount } from "@/lib/onboarding/checklistState";
 
 const engines=[{name:"ChatGPT",short:"G",color:"green"},{name:"Gemini",short:"◆",color:"blue"},{name:"Perplexity",short:"P",color:"teal"},{name:"Claude",short:"C",color:"orange"},{name:"DeepSeek",short:"D",color:"crimson"},{name:"AI Overviews",short:"◈",color:"cobalt"}];
 const engineByKey:Record<string,{name:string;short:string;color:string}>={openai:engines[0],gemini:engines[1],perplexity:engines[2],anthropic:engines[3],deepseek:engines[4],ai_overviews:engines[5]};
@@ -130,6 +132,9 @@ export default function AppPage(){
  const displayName=demo?"Maya Johnson":(ctx?.fullName||"");
  const displayEmail=demo?"maya@acme.co":(ctx?.email||"");
  const firstName=displayName.split(" ")[0]||"there";
+ // A real account-age signal for per-tab first-visit tips, not just "first time this
+ // browser visited" — see lib/onboarding/checklistState.ts's isNewAccount for why.
+ const isNewUser=!demo&&!!ctx&&isNewAccount(ctx.workspaceCreatedAt);
 
  return <main className="app-shell">{toast&&<div className="toast"><Check/>{toast}</div>}
   <aside className={`sidebar ${open?"open":""}`}>
@@ -145,7 +150,7 @@ export default function AppPage(){
    </div>
   </aside>
   <section className="app-content"><header className="app-header"><button className="menu-btn" onClick={()=>setOpen(true)}><Menu/></button><div className="header-search"><Search/><input placeholder="Search prompts, reports, fixes…"/><kbd>⌘ K</kbd></div><div className="header-actions"><button className="icon-btn"><Bell/><i/></button><button className="icon-btn theme-toggle" onClick={toggleTheme} title={theme==='light'?'Switch to dark mode':'Switch to light mode'} aria-label="Toggle theme">{theme==='light'?<Moon size={18}/>:<Sun size={18}/>}</button><button className="scan-btn" onClick={scan} disabled={scanning}>{scanning?<LoaderCircle className="spin"/>:<Play/>}{scanning?(scanProgress?`${scanProgress.done}/${scanProgress.total} prompts…`:"Starting…"):"Run scan"}</button></div></header>
-    <div className="app-page">{section==="overview"?<Overview demo={demo} brand={activeBrand} refreshKey={refreshKey} scan={scan} scanning={scanning} setSection={setSection} firstName={firstName}/>:section==="prompts"?<Prompts demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:section==="answers"?<Answers demo={demo} brand={activeBrand} refreshKey={refreshKey} scan={scan} scanning={scanning}/>:section==="fixes"?<Fixes demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:section==="competitors"?<Competitors demo={demo} brand={activeBrand}/>:section==="reports"?<Reports demo={demo} brand={activeBrand} refreshKey={refreshKey}/>:<SettingsPage demo={demo} brand={activeBrand} ctx={ctx} onBrandUpdated={updated=>setCtx(c=>c?{...c,brands:c.brands.map(b=>b.id===updated.id?{...b,...updated}:b)}:c)}/>}</div>
+    <div className="app-page">{section==="overview"?<Overview demo={demo} brand={activeBrand} refreshKey={refreshKey} scan={scan} scanning={scanning} setSection={setSection} firstName={firstName}/>:section==="prompts"?<Prompts demo={demo} brand={activeBrand} refreshKey={refreshKey} newUser={isNewUser}/>:section==="answers"?<Answers demo={demo} brand={activeBrand} refreshKey={refreshKey} scan={scan} scanning={scanning} newUser={isNewUser}/>:section==="fixes"?<Fixes demo={demo} brand={activeBrand} refreshKey={refreshKey} newUser={isNewUser}/>:section==="competitors"?<Competitors demo={demo} brand={activeBrand} newUser={isNewUser}/>:section==="reports"?<Reports demo={demo} brand={activeBrand} refreshKey={refreshKey} newUser={isNewUser}/>:<SettingsPage demo={demo} brand={activeBrand} ctx={ctx} newUser={isNewUser} onBrandUpdated={updated=>setCtx(c=>c?{...c,brands:c.brands.map(b=>b.id===updated.id?{...b,...updated}:b)}:c)}/>}</div>
   </section>
   <CoachMarkTour demo={demo} active={section==="overview"}/>
  </main>
@@ -521,7 +526,7 @@ function FixContent({content}:{content:string}){
  </div>
 }
 
-function Prompts({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:number}){
+function Prompts({demo,brand,refreshKey,newUser}:{demo:boolean;brand?:Brand;refreshKey:number;newUser:boolean}){
  const [modal,setModal]=useState(false);
  const [prompts,setPrompts]=useState<Prompt[]>([]);
  const [loading,setLoading]=useState(!demo);
@@ -568,6 +573,7 @@ function Prompts({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:n
  if(!brand)return <div className="page-title"><div><span className="overline">MONITORING</span><h1>Tracked prompts</h1><p>Add a client first — its buyer-intent prompts are generated automatically.</p></div></div>;
 
  return <><div className="page-title"><div><span className="overline">MONITORING</span><h1>Tracked prompts for {brand.name}</h1><p>Each question is checked against every AI engine. Run a scan to see where you appear.</p></div><button className="scan-btn" onClick={()=>setModal(true)}><Plus/>Add prompt</button></div>
+  <TabTip tabId="prompts" newUser={newUser} text="These are the buyer-intent questions we'll ask every AI engine. Edit or add your own — changes take effect on your next scan."/>
   {loading?<p>Loading…</p>:!prompts.length?<EmptyState icon={Search} headline="No prompts tracked yet" subtext={`Add the buyer-intent questions real customers ask AI about ${brand.name}'s category — each one is checked against every engine on your next scan.`} primaryLabel="+ Add your own prompt" onPrimary={()=>setModal(true)}/>:<>
    {latest&&<article className="panel prompt-full" style={{marginBottom:"14px"}}><PromptMatrix prompts={prompts} answers={latest.answers}/></article>}
    <article className="panel prompt-full">
@@ -606,7 +612,7 @@ const demoAnswerText:Record<string,string>={
 // Latest scan only, mirroring the Reports card pattern (one report = one scan's answers) —
 // no scan picker. Reuses GET /api/reports/[runId] (already returns raw_answer as `text`,
 // added 2026-08-02 per session_notes.md #10) rather than duplicating that query client-side.
-function Answers({demo,brand,refreshKey,scan,scanning}:{demo:boolean;brand?:Brand;refreshKey:number;scan:()=>void;scanning:boolean}){
+function Answers({demo,brand,refreshKey,scan,scanning,newUser}:{demo:boolean;brand?:Brand;refreshKey:number;scan:()=>void;scanning:boolean;newUser:boolean}){
  const {scan:latest,loading:latestLoading}=useLatestScan(demo,brand,refreshKey);
  const [report,setReport]=useState<ReportDetail|null>(null);
  const [loading,setLoading]=useState(false);
@@ -622,7 +628,7 @@ function Answers({demo,brand,refreshKey,scan,scanning}:{demo:boolean;brand?:Bran
   return ()=>{cancelled=true};
  },[demo,latest?.runId,retryKey]);
 
- const header=<div className="page-title"><div><span className="overline">TRANSPARENCY</span><h1>Answers</h1><p>Every engine&apos;s raw response from your latest scan, in full.</p></div></div>;
+ const header=<><div className="page-title"><div><span className="overline">TRANSPARENCY</span><h1>Answers</h1><p>Every engine&apos;s raw response from your latest scan, in full.</p></div></div><TabTip tabId="answers" newUser={newUser} text="Every engine's raw response lands here after a scan — your brand's mention is highlighted so you can check exactly what each AI said."/></>;
 
  if(demo){
   const brandName="Acme Software";
@@ -679,7 +685,7 @@ function Answers({demo,brand,refreshKey,scan,scanning}:{demo:boolean;brand?:Bran
  </>;
 }
 
-function Fixes({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:number}){
+function Fixes({demo,brand,refreshKey,newUser}:{demo:boolean;brand?:Brand;refreshKey:number;newUser:boolean}){
  const [fixesTab,setFixesTab]=useState<"fixes"|"seo">("fixes");
  const [fixes,setFixes]=useState<Fix[]>([]);
  const [loading,setLoading]=useState(!demo);
@@ -705,7 +711,7 @@ function Fixes({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:num
   setUpdatingId(null);await loadFixes();
  }
 
- const pageHeader=<div className="page-title"><div><span className="overline">AI FIX GENERATOR</span><h1>Turn gaps into growth</h1><p>{demo?"Actionable recommendations based on where competitors beat you.":brand?`Recommendations for ${brand.name} from your most recent scan.`:"Add a client and run a scan to generate recommendations."}</p></div></div>;
+ const pageHeader=<><div className="page-title"><div><span className="overline">AI FIX GENERATOR</span><h1>Turn gaps into growth</h1><p>{demo?"Actionable recommendations based on where competitors beat you.":brand?`Recommendations for ${brand.name} from your most recent scan.`:"Add a client and run a scan to generate recommendations."}</p></div></div><TabTip tabId="fixes" newUser={newUser} text="After a scan, Claude suggests specific fixes to improve your score — track each one from pending to done."/></>;
  const tabBar=<div className="overview-tabs" style={{marginBottom:"14px"}}><button className={fixesTab==="fixes"?"active":""} onClick={()=>setFixesTab("fixes")}><WandSparkles size={14}/>AI Visibility Fixes</button><button className={fixesTab==="seo"?"active":""} onClick={()=>setFixesTab("seo")}><Globe size={14}/>SEO Audit</button></div>;
 
  if(fixesTab==="seo") return <>{pageHeader}{tabBar}<SeoAuditTab demo={demo} brand={brand}/></>;
@@ -873,7 +879,7 @@ function SeoAuditTab({demo,brand}:{demo:boolean;brand?:Brand}){
 // voice" percentage-bars panel is demo-only, because those percentages come from scan_runs/
 // answers, which aren't wired yet — showing real competitor names next to fabricated scores
 // would be worse than not showing the panel at all. It comes back once scan data is real.
-function Competitors({demo,brand}:{demo:boolean;brand?:Brand}){
+function Competitors({demo,brand,newUser}:{demo:boolean;brand?:Brand;newUser:boolean}){
  const [items,setItems]=useState<Competitor[]>([]);
  const [sov,setSov]=useState<ShareOfVoiceRow[]>([]);
  const [scanned,setScanned]=useState(false);
@@ -914,6 +920,7 @@ function Competitors({demo,brand}:{demo:boolean;brand?:Brand}){
  if(!brand)return <div className="page-title"><div><span className="overline">LOCAL COMPETITIVE INTELLIGENCE</span><h1>Competitors near you</h1><p>Add a client brand first, then track the local competitors AI recommends instead of them.</p></div></div>;
 
  return <><div className="page-title"><div><span className="overline">LOCAL COMPETITIVE INTELLIGENCE</span><h1>Competitors near you</h1><p>See which nearby businesses in {brand.name}&apos;s category AI recommends instead of them.</p></div><button className="scan-btn" onClick={()=>setModal(true)}><Plus/>Add a local competitor</button></div>
+  <TabTip tabId="competitors" newUser={newUser} text="Add the brands you compete with to see who wins the AI answer when you don't."/>
   {loading?<p>Loading competitors…</p>:items.length===0?<EmptyState icon={Users} headline="See who wins the answer when you don't" subtext="Add the brands you compete with and we'll track share-of-voice across the same prompts once you scan." primaryLabel="Add a competitor" onPrimary={()=>setModal(true)}/>:<><div className="competitor-grid">{items.map(c=>{const row=sov.find(r=>r.name===c.name);return <article className="panel competitor-card" key={c.id}><span>{c.name.slice(0,2).toUpperCase()}</span><div><h3>{c.name}</h3><p>{c.domain||"No domain set"}</p></div>{row&&<b>{row.share}%</b>}<button><MoreHorizontal/></button></article>})}</div>
   <article className="panel"><PanelHead title="Share of AI voice" sub={sov.length?`How often each brand is named across the ${sov[0].total} answers in the latest scan`:"Run a scan to see who AI names for your prompts"}/>
    {sov.length===0?<p className="muted-note">{scanned?"The latest scan ran before competitor tracking was added. Run a new scan to compare.":`No scan yet for ${brand.name}.`}</p>
@@ -940,14 +947,14 @@ type ReportDetail={
  traffic:GscData;
 };
 function groupByEngineRaw(answers:{engine:string;brand_mentioned:boolean}[]){const byKey=new Map<string,{mentioned:number;total:number}>();for(const a of answers){const e=byKey.get(a.engine)||{mentioned:0,total:0};e.total++;if(a.brand_mentioned)e.mentioned++;byKey.set(a.engine,e)}return Array.from(byKey.entries()).map(([key,{mentioned,total}])=>{const meta=engineByKey[key]||{name:key,short:key[0]?.toUpperCase()||"?",color:"green"};const pct=total?Math.round(mentioned/total*100):0;return{key,name:meta.name,short:meta.short,color:meta.color,pct}})}
-function Reports({demo,brand,refreshKey}:{demo:boolean;brand?:Brand;refreshKey:number}){
+function Reports({demo,brand,refreshKey,newUser}:{demo:boolean;brand?:Brand;refreshKey:number;newUser:boolean}){
  const history=useScanHistory(demo,brand,refreshKey);
  const [viewRunId,setViewRunId]=useState<string|null>(null);
  const [report,setReport]=useState<ReportDetail|null>(null);
  const [reportLoading,setReportLoading]=useState(false);
  async function openReport(runId:string){setViewRunId(runId);setReportLoading(true);const r=await fetch(`/api/reports/${runId}`);const j=await r.json().catch(()=>({}));setReport(j.run?j:null);setReportLoading(false)}
  function closeReport(){setViewRunId(null);setReport(null)}
- const header=<div className="page-title"><div><span className="overline">REPORTS</span><h1>Visibility reports</h1><p>Every scan auto-generates a full report. Click any entry to view or export.</p></div></div>;
+ const header=<><div className="page-title"><div><span className="overline">REPORTS</span><h1>Visibility reports</h1><p>Every scan auto-generates a full report. Click any entry to view or export.</p></div></div><TabTip tabId="reports" newUser={newUser} text="Every scan generates a shareable report here, exportable to PDF for your team or clients."/></>;
  if(demo)return <>{header}<div className="report-grid">{["June 2026","Q2 summary","May 2026"].map((r,i)=><article className="panel report-card" key={r}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"12px"}}><span style={{fontSize:"10px",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",color:"var(--muted)"}}>SCAN #{3-i}</span><span style={{fontSize:"10px",fontWeight:700,padding:"3px 8px",borderRadius:"99px",background:"var(--sky-d)",color:"var(--sky)"}}>Demo</span></div><div style={{display:"flex",alignItems:"flex-end",gap:"14px",marginBottom:"16px"}}><span style={{fontSize:"52px",fontWeight:800,lineHeight:1,fontFamily:"Outfit,system-ui",color:"var(--em)",letterSpacing:"-2px"}}>{67-i*4}</span><div style={{paddingBottom:"5px"}}><div style={{fontSize:"11px",color:"var(--muted)",marginBottom:"2px"}}>AI Visibility Score</div><div style={{fontSize:"12px",fontWeight:600,color:"var(--ink)"}}>{14-i*2}/25 mentions</div></div></div><button className="button" style={{fontSize:"12px",padding:"7px 14px"}}>View report <ArrowUpRight style={{width:"13px"}}/></button></article>)}</div></>;
  if(!brand)return <>{header}<p style={{color:"var(--muted)",fontSize:"13px"}}>Add a client brand to start generating reports.</p></>;
  if(history.length===0)return <>{header}<div className="panel" style={{padding:"40px 32px",textAlign:"center"}}><FileText style={{width:"32px",color:"var(--faint)",marginBottom:"12px"}}/><p style={{margin:"0 0 8px",fontWeight:600,color:"var(--ink)"}}>No reports yet for {brand.name}</p><p style={{margin:0,fontSize:"13px",color:"var(--muted)"}}>Click <b>Run scan</b> above to generate your first AI visibility report.</p></div></>;
@@ -1106,7 +1113,7 @@ function ReportViewer({runId,report,loading,history,onClose}:{runId:string;repor
 const WEEK_DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 const FREQ_LABEL:{[k:string]:string}={weekly:"Weekly",monthly:"Monthly",off:"Off (manual only)"};
 
-function SettingsPage({demo,brand,ctx,onBrandUpdated}:{demo:boolean;brand?:Brand;ctx:WorkspaceContext|null;onBrandUpdated:(updated:{id:string;name:string;domain:string;description:string})=>void}){
+function SettingsPage({demo,brand,ctx,onBrandUpdated,newUser}:{demo:boolean;brand?:Brand;ctx:WorkspaceContext|null;onBrandUpdated:(updated:{id:string;name:string;domain:string;description:string})=>void;newUser:boolean}){
  const [tab,setTab]=useState<string>("schedule");
  const [frequency,setFrequency]=useState<"weekly"|"monthly"|"off">("weekly");
  const [scanDay,setScanDay]=useState(1);
@@ -1133,6 +1140,7 @@ function SettingsPage({demo,brand,ctx,onBrandUpdated}:{demo:boolean;brand?:Brand
  }
  const nextScanLabel=frequency==="weekly"?`Every ${WEEK_DAYS[scanDay]} at 06:00 UTC`:frequency==="monthly"?`Day ${scanDay} of each month at 06:00 UTC`:"Disabled — use Run scan button";
  return <><div className="page-title"><div><span className="overline">SETTINGS</span><h1>Workspace settings</h1><p>Manage scan schedule, brand profile, and team.</p></div></div>
+  <TabTip tabId="settings" newUser={newUser} text="Connect Google Search Console, set your scan schedule, and invite teammates here."/>
   <div className="settings-grid">
    <article className="panel settings-nav">
     <button className={tab==="schedule"?"active":""} onClick={()=>setTab("schedule")}><Radar/>Scan schedule</button>

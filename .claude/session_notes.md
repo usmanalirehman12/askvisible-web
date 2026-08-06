@@ -1,6 +1,6 @@
 # AskVisibleAI — Session Notes
 
-**Last updated:** 2026-08-06 (First-run UX: onboarding checklist, empty states, coach-mark tour, Answers view — shipped, pushed to production)  
+**Last updated:** 2026-08-06 (First-run UX extended to every tab — per-tab dismissible tips gated by real account age — code shipped, not yet pushed)  
 **Repo:** usmanalirehman12/askvisible-web  
 **Deploy:** https://askvisible-web-mfu2.vercel.app  
 **Local:** `C:\Users\zayns\OneDrive\Documents\websitefixer`  
@@ -285,6 +285,46 @@ Driven by a competitive gap analysis (`updated_gaps.md`, run against Peec AI/Pro
 **Verified:** `npx tsc --noEmit` clean, `npm test` (169 passing, +5 new for `checklistState`), `npm run deadcode` clean, `npm run build` succeeds. Manually walked demo mode in-browser (temporarily renamed `.env.local` to force `demo=true`, restored byte-identical afterward, confirmed via `diff`) — confirmed the Answers tab renders, row expansion works, and `Acme Software` gets wrapped in `<mark>` in the raw response text. Checklist and tour correctly do not render in demo mode. Committed as `12d1dc8` and pushed to `origin/master`.
 
 **Not verified — needs you, against production:** the checklist's real progression through brand→prompts→scan→report for a genuinely new signup (this environment doesn't have your login), and the tour firing exactly once and not re-appearing (clear `localStorage['av-has-seen-tour']` to re-test).
+
+### 13. First-run guidance extended to every tab (2026-08-06)
+
+You flagged that the checklist/tour from #12 only covered Overview — "needed for rest of the
+tab too" — plus that it should "activate for first time user login," which meant the existing
+`av-has-seen-tour` localStorage flag (device-local, resets on a cleared cache or new device)
+wasn't a strong enough signal for "is this actually a new account." Confirmed with you before
+building: per-tab guidance should be a lightweight dismissible first-visit tip (not a forced
+multi-tab walkthrough), and eligibility should be tied to real account age.
+
+**Real account-age signal, no migration needed:** `workspaces.created_at` already existed in
+`supabase/schema.sql` (set by `handle_new_user()` at signup) but wasn't selected anywhere.
+`getWorkspaceContext()` (`lib/data/workspace.ts`) now selects it and returns it as
+`workspaceCreatedAt` on `WorkspaceContext` (`lib/data/types.ts`). `isNewAccount(createdAt, now)`
+in `lib/onboarding/checklistState.ts` — the same file #12's `computeChecklistSteps` lives in —
+returns true inside a 14-day window; 5 new `vitest` tests including the boundary and an
+unparseable-timestamp case (treated as "not new" rather than throwing). `AppPage` computes
+`isNewUser = !demo && !!ctx && isNewAccount(ctx.workspaceCreatedAt)` once and passes it down
+as `newUser` to every tab.
+
+**`app/components/TabTip.tsx`** — deliberately not another `CoachMarkTour`-style full-screen
+spotlight. It's an inline dismissible banner (visual weight closer to `.checker-error` than a
+portal overlay) rendered at the top of a tab's content, so it never blocks interaction with
+the page underneath. Renders nothing unless `newUser` is true and
+`localStorage['av-tab-tip-seen-' + tabId]` isn't already `"1"` — dismissal is per tab, closing
+Prompts' tip doesn't touch Answers'. Wired into Prompts, Answers, Competitors, AI Fixes,
+Reports, and Settings, each with tab-specific copy. Overview was deliberately left out — it
+already has the checklist and the coach-mark tour from #12; stacking a third layer of
+guidance there would be noise, not help.
+
+**Verified:** `npx tsc --noEmit` clean, `npm test` (174 passing, +5 for `isNewAccount`),
+`npm run deadcode` clean, `npm run build` succeeds. Re-ran the same `.env.local`
+rename/restore technique from #12 to force `demo=true`, clicked through all 7 tabs via
+`javascript_tool`, and confirmed zero `TabTip` dismiss buttons render anywhere in demo mode
+(`newUser` is always `false` there) — `.env.local` restored and diff-verified identical
+afterward.
+
+**Not verified — needs you, against production:** the actual 14-day new-account window against
+a real signup (this environment has no login), and that each tab's tip persists its own
+dismissal correctly across a real session.
 
 ---
 

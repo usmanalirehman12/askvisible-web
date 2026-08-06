@@ -38,6 +38,9 @@ export type WorkspaceContext = {
   // Every workspace the user belongs to, for the switcher. Usually one.
   workspaces: WorkspaceSummary[];
   brands: Brand[];
+  // Set by handle_new_user() at signup — a real account-age signal for first-run guidance,
+  // independent of any localStorage flag (which resets on a cleared cache or new device).
+  workspaceCreatedAt: string;
 };
 
 export type Prompt = {

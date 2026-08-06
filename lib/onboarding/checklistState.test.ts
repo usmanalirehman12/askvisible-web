@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checklistProgress, computeChecklistSteps } from "./checklistState";
+import { checklistProgress, computeChecklistSteps, isNewAccount } from "./checklistState";
 
 describe("computeChecklistSteps", () => {
   it("marks every step undone for a brand-new workspace with no brand", () => {
@@ -43,5 +43,31 @@ describe("checklistProgress", () => {
     const progress = checklistProgress(steps);
     expect(progress.done).toBe(progress.total);
     expect(progress.complete).toBe(true);
+  });
+});
+
+describe("isNewAccount", () => {
+  const now = new Date("2026-08-06T12:00:00Z").getTime();
+
+  it("is true for a workspace created moments ago", () => {
+    expect(isNewAccount(new Date(now - 1000).toISOString(), now)).toBe(true);
+  });
+
+  it("is true right up to just under the 14-day window", () => {
+    const justUnder = now - (14 * 24 * 60 * 60 * 1000 - 1000);
+    expect(isNewAccount(new Date(justUnder).toISOString(), now)).toBe(true);
+  });
+
+  it("is false once the workspace is 14 days old or older", () => {
+    const exactly14Days = now - 14 * 24 * 60 * 60 * 1000;
+    expect(isNewAccount(new Date(exactly14Days).toISOString(), now)).toBe(false);
+  });
+
+  it("is false for a workspace created long ago", () => {
+    expect(isNewAccount(new Date("2020-01-01").toISOString(), now)).toBe(false);
+  });
+
+  it("is false for an unparseable timestamp rather than throwing", () => {
+    expect(isNewAccount("not-a-date", now)).toBe(false);
   });
 });

@@ -4,7 +4,7 @@ Working plan for the product. Detailed history, architectural decisions and debu
 notes live in [`.claude/session_notes.md`](.claude/session_notes.md); this file is the
 short version: what's done, what's next, and why.
 
-Last updated: 2026-08-06 (First-run UX — onboarding checklist, empty states, coach-mark tour, Answers view — shipped and pushed to production)
+Last updated: 2026-08-06 (First-run UX extended to every tab — per-tab tips gated by real account age, not just device localStorage — code shipped, not yet pushed)
 
 ---
 
@@ -54,7 +54,7 @@ custom domain, and a free pre-signup checker tool — those need you too, not co
 | 14 | Team members | Invite by email with roles, accept flow, revoke and remove |
 | 15 | Multi-workspace switching | Sidebar switcher; appears only for people in 2+ workspaces |
 | 16 | Reports, SEO Audit & Traffic upgrade | Timestamps everywhere; GSC 7/30/90-day + custom date ranges; 10-tab SEO audit (incl. Google PageSpeed Insights); reports embed the full audit + traffic + a historical score-trend chart. Detail in `.claude/session_notes.md`. Migration run 2026-08-04 — Run Audit confirmed working in production. |
-| 17 | First-run UX | Onboarding checklist (4 steps, derived from real brand/prompt/scan state), consistent empty states across Prompts/Competitors/Overview, a skippable coach-mark tour, and a new Answers tab showing every engine's raw response with the brand mention highlighted. Driven by a competitive gap analysis; detail in `.claude/session_notes.md` #12. Shipped 2026-08-06. |
+| 17 | First-run UX | Onboarding checklist (4 steps, derived from real brand/prompt/scan state), consistent empty states across Prompts/Competitors/Overview, a skippable coach-mark tour, and a new Answers tab showing every engine's raw response with the brand mention highlighted. Driven by a competitive gap analysis; detail in `.claude/session_notes.md` #12. Shipped 2026-08-06. **Extended 2026-08-06:** the tour/checklist only covered Overview — every other tab (Prompts, Answers, Competitors, AI Fixes, Reports, Settings) now gets a dismissible first-visit tip, gated by a real account-age signal (`workspaces.created_at`, new `workspaceCreatedAt` on `WorkspaceContext`) rather than a device-local flag. Detail in `.claude/session_notes.md` #13. |
 
 ### Shipped — engineering health
 
