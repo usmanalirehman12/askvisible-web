@@ -268,18 +268,26 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
   return ()=>{cancelled=true};
  },[demo,brand,refreshKey]);
 
- const header=<div className="page-title"><div><span className="overline">OVERVIEW</span><h1>Good morning, {firstName} <span>👋</span></h1><p>Here&apos;s how your brand is showing up in AI answers.</p></div><div className="date-control"><select value={trendRange} onChange={e=>setTrendRange(e.target.value as "7d"|"15d"|"30d")} style={{border:0,background:"transparent",color:"inherit",font:"inherit",cursor:"pointer",appearance:"none",paddingRight:"2px"}} aria-label="Trend chart range"><option value="7d">Last 7 days</option><option value="15d">Last 15 days</option><option value="30d">Last 30 days</option></select><ChevronDown/></div></div>;
+ const header=<div className="page-title"><div><span className="overline">OVERVIEW</span><h1>Good morning, {firstName} <span>👋</span></h1><p>Here&apos;s how your brand is showing up in AI answers.</p></div></div>;
+ const dateControl=<div className="date-control" style={{marginBottom:"14px"}}><select value={trendRange} onChange={e=>setTrendRange(e.target.value as "7d"|"15d"|"30d")} style={{border:0,background:"transparent",color:"inherit",font:"inherit",cursor:"pointer",appearance:"none",paddingRight:"2px"}} aria-label="Trend chart range"><option value="7d">Last 7 days</option><option value="15d">Last 15 days</option><option value="30d">Last 30 days</option></select><ChevronDown/></div>;
  const tabBar=<div className="overview-tabs"><button className={overviewTab==="summary"?"active":""} onClick={()=>setOverviewTab("summary")}>Summary</button><button className={overviewTab==="traffic"?"active":""} onClick={()=>setOverviewTab("traffic")}>Traffic &amp; Reach</button><button className={overviewTab==="rankings"?"active":""} onClick={()=>setOverviewTab("rankings")}>Rankings</button></div>;
 
  if(demo){
   const demoRangeDays={"7d":7,"15d":15,"30d":30}[trendRange];
   const demoSpark=demoSparkData.filter(d=>isWithinDays(d.date,demoRangeDays));
-  return <>{header}{tabBar}
+  return <>{header}
   {overviewTab==="summary"&&<>
    <p style={{fontSize:"12px",color:"var(--muted)",margin:"0 0 8px"}}>Last scanned {formatTimestamp(new Date().toISOString(),"datetime")}</p>
-   <ScoreHero score={67} confidence="Full scan" delta={demoSpark.length>=2?demoSpark[demoSpark.length-1].score-demoSpark[demoSpark.length-2].score:null} sparkData={demoSpark}/>
-   <div className="stats-grid"><Stat label="Total mentions" value="142" trend="12.4%" icon={Activity}/><Stat label="Average position" value="#2.4" sub="when mentioned" icon={Target}/><Stat label="Prompts tracked" value="183" sub="of 250 monthly" icon={Search}/><Stat label="AI engines" value="6" sub="ChatGPT · Gemini · Perplexity · Claude · DeepSeek · AI Overviews" icon={BarChart3}/></div>
-   <div className="dashboard-grid"><article className="panel visibility-panel"><PanelHead title="Visibility trend" sub="Your share of AI answers over time"/><div className="chart-legend"><span><i/>Your brand</span><span><i/>Top competitor</span></div><div className="big-chart"><div className="axis"><span>80%</span><span>60%</span><span>40%</span><span>20%</span><span>0%</span></div><svg viewBox="0 0 800 260" preserveAspectRatio="none"><defs><linearGradient id="appfill"><stop offset="0" stopColor="#0EA5E9" stopOpacity=".22"/><stop offset="1" stopColor="#0EA5E9" stopOpacity="0"/></linearGradient></defs><path className="grid-lines" d="M0 10H800M0 70H800M0 130H800M0 190H800M0 250H800"/><path className="competitor-line" d="M0 158 C90 144 110 118 190 125 S300 98 380 112 S510 75 590 92 S700 65 800 68"/><path className="trend-area" d="M0 205 C80 195 110 185 170 188 S260 143 330 153 S440 115 510 125 S625 80 690 92 S760 50 800 43 L800 260L0 260Z"/><path className="trend-line" d="M0 205 C80 195 110 185 170 188 S260 143 330 153 S440 115 510 125 S625 80 690 92 S760 50 800 43"/><circle cx="800" cy="43" r="5"/></svg><div className="x-axis"><span>Jun 19</span><span>Jun 25</span><span>Jul 1</span><span>Jul 7</span><span>Jul 13</span><span>Jul 19</span></div></div></article>
+   <div style={{display:"flex",gap:"14px",alignItems:"stretch",flexWrap:"wrap"}}>
+    <div style={{flex:"1 1 420px"}}><ScoreHero score={67} confidence="Full scan" delta={demoSpark.length>=2?demoSpark[demoSpark.length-1].score-demoSpark[demoSpark.length-2].score:null} sparkData={demoSpark}/></div>
+    <div className="stats-grid" style={{flex:"1 1 320px",gridTemplateColumns:"repeat(2,1fr)"}}><Stat label="Total mentions" value="142" trend="12.4%" icon={Activity}/><Stat label="Average position" value="#2.4" sub="when mentioned" icon={Target}/><Stat label="Prompts tracked" value="183" sub="of 250 monthly" icon={Search}/><Stat label="AI engines" value="6" sub="ChatGPT · Gemini · Perplexity · Claude · DeepSeek · AI Overviews" icon={BarChart3}/></div>
+   </div>
+  </>}
+  {tabBar}
+  {overviewTab==="summary"&&<>
+   {dateControl}
+   <article className="panel visibility-panel"><PanelHead title="Visibility trend" sub="Your share of AI answers over time"/><div className="chart-legend"><span><i/>Your brand</span><span><i/>Top competitor</span></div><div className="big-chart"><div className="axis"><span>80%</span><span>60%</span><span>40%</span><span>20%</span><span>0%</span></div><svg viewBox="0 0 800 260" preserveAspectRatio="none"><defs><linearGradient id="appfill"><stop offset="0" stopColor="#0EA5E9" stopOpacity=".22"/><stop offset="1" stopColor="#0EA5E9" stopOpacity="0"/></linearGradient></defs><path className="grid-lines" d="M0 10H800M0 70H800M0 130H800M0 190H800M0 250H800"/><path className="competitor-line" d="M0 158 C90 144 110 118 190 125 S300 98 380 112 S510 75 590 92 S700 65 800 68"/><path className="trend-area" d="M0 205 C80 195 110 185 170 188 S260 143 330 153 S440 115 510 125 S625 80 690 92 S760 50 800 43 L800 260L0 260Z"/><path className="trend-line" d="M0 205 C80 195 110 185 170 188 S260 143 330 153 S440 115 510 125 S625 80 690 92 S760 50 800 43"/><circle cx="800" cy="43" r="5"/></svg><div className="x-axis"><span>Jun 19</span><span>Jun 25</span><span>Jul 1</span><span>Jul 7</span><span>Jul 13</span><span>Jul 19</span></div></div></article>
+   <div className="dashboard-grid" style={{gridTemplateColumns:"1fr"}}>
    <article className="panel engine-panel"><PanelHead title="Visibility by engine" sub="Last 30 days"/>{demoEngines.map(e=><div className="engine-row" key={e.name}><span className={`engine-logo ${e.color}`}>{e.short}</span><div><b>{e.name}</b><i><span style={{width:e.score+"%"}}/></i></div><strong>{e.score}%</strong></div>)}<button className="panel-link" onClick={()=>setSection("prompts")}>View prompt details <ArrowUpRight/></button></article>
    <article className="panel prompt-panel"><PanelHead title="Recent prompt performance" sub="Latest results across all engines" action={<button onClick={()=>setSection("prompts")}>View all <ArrowUpRight/></button>}/><DemoPromptTable short/></article>
    <article className="panel opportunities"><PanelHead title="Top opportunities" sub="AI-recommended actions ranked by impact" action={<button onClick={()=>setSection("fixes")}>View all</button>}/>{[{t:"Add direct comparison content",p:"Your competitors win 14 prompts with comparison pages.",impact:"High",lift:"+12–18%"},{t:"Strengthen third-party citations",p:"AI engines cite 3 sources that don't mention your brand.",impact:"High",lift:"+8–14%"},{t:"Add SoftwareApplication schema",p:"Help engines understand your product entity and pricing.",impact:"Med",lift:"+4–7%"}].map(o=><div className="opportunity" key={o.t}><span className="opp-icon"><Sparkles/></span><div><b>{o.t}</b><p>{o.p}</p><small><em className={o.impact==="High"?"high":"medium"}>{o.impact} impact</em>Estimated lift <strong>{o.lift}</strong></small></div><button onClick={()=>setSection("fixes")}>Fix this <ArrowUpRight/></button></div>)}</article>
@@ -304,18 +312,24 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
  const trendRangeDays={"7d":7,"15d":15,"30d":30}[trendRange];
  const sparkData=history.filter(h=>isWithinDays(h.completedAt,trendRangeDays)).map(h=>({score:h.score,date:h.completedAt||""}));
 
- return <>{header}{tabBar}
+ return <>{header}
   <OnboardingChecklist input={{hasBrand:true,promptCount:promptCount??0,scanCount:history.length}} onNavigate={setSection} onRunScan={scan} brandId={brand.id}/>
   {overviewTab==="summary"&&<>
    <p style={{fontSize:"12px",color:"var(--muted)",margin:"0 0 8px"}}>Last scanned {formatTimestamp(latest.completedAt,"datetime")}</p>
-   <ScoreHero score={summary.score} confidence={coverageLabel(latest.confidence??0)} delta={delta} sparkData={sparkData}/>
-   <div className="stats-grid">
-    <Stat label="Total mentions" value={String(summary.mentions)} sub={`of ${summary.total} answers checked`} icon={Activity}/>
-    <Stat label="Average position" value={summary.avgPosition!=null?`#${summary.avgPosition}`:"—"} sub="when mentioned" icon={Target}/>
-    <Stat label="Scans run" value={String(history.length||1)} sub={history.length>1?`first scan ${formatTimestamp(history[0]?.completedAt)}`:"baseline scan"} icon={Search}/>
-    <Stat label="AI engines" value="6" sub="ChatGPT · Gemini · Perplexity · Claude · DeepSeek · AI Overviews" icon={BarChart3}/>
+   <div style={{display:"flex",gap:"14px",alignItems:"stretch",flexWrap:"wrap"}}>
+    <div style={{flex:"1 1 420px"}}><ScoreHero score={summary.score} confidence={coverageLabel(latest.confidence??0)} delta={delta} sparkData={sparkData}/></div>
+    <div className="stats-grid" style={{flex:"1 1 320px",gridTemplateColumns:"repeat(2,1fr)"}}>
+     <Stat label="Total mentions" value={String(summary.mentions)} sub={`of ${summary.total} answers checked`} icon={Activity}/>
+     <Stat label="Average position" value={summary.avgPosition!=null?`#${summary.avgPosition}`:"—"} sub="when mentioned" icon={Target}/>
+     <Stat label="Scans run" value={String(history.length||1)} sub={history.length>1?`first scan ${formatTimestamp(history[0]?.completedAt)}`:"baseline scan"} icon={Search}/>
+     <Stat label="AI engines" value="6" sub="ChatGPT · Gemini · Perplexity · Claude · DeepSeek · AI Overviews" icon={BarChart3}/>
+    </div>
    </div>
-   <div className="dashboard-grid">
+  </>}
+  {tabBar}
+  {overviewTab==="summary"&&<>
+   {dateControl}
+   <div className="dashboard-grid" style={{gridTemplateColumns:"1fr"}}>
     <article className="panel engine-panel"><PanelHead title="Visibility by engine" sub="Most recent scan"/>{byEngine.map(e=><div className="engine-row" key={e.key}><span className={`engine-logo ${e.color}`}>{e.short}</span><div><b>{e.name}</b><i><span style={{width:e.pct+"%"}}/></i></div><strong>{e.pct}%</strong></div>)}<button className="panel-link" onClick={()=>setSection("prompts")}>View prompt details <ArrowUpRight/></button></article>
     <article className="panel prompt-panel"><PanelHead title="Recent prompt performance" sub="Latest results across all engines" action={<button onClick={()=>setSection("prompts")}>View all <ArrowUpRight/></button>}/><RealPromptTable answers={latest.answers.slice(0,4)}/></article>
    </div>
@@ -1061,6 +1075,7 @@ const FIX_STATUS_LABEL:Record<string,string>={all:"All fixes",pending:"Pending",
 // Status-change history comes from the audit log (#3 in session_notes), not the fixes table
 // itself -- fixes only ever store their current status, so without the log there'd be no way
 // to show "moved from pending to implementing on [date]", only the end state.
+type FprItem={id:string;category:string;title:string;status:string;generated:string;scanRunId:string|null;rationale:string|null;generatedContent:string|null;impactLabel:string|null};
 function FixProgressRow({f,timeline,scanDate}:{f:{id:string;category:string;title:string;status:string;generated:string};timeline:{fromStatus:string|null;toStatus:string;createdAt:string}[];scanDate:string|null}){
  return <article className="panel" style={{padding:"18px 20px"}}>
   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:"12px",marginBottom:"8px"}}>
@@ -1079,13 +1094,52 @@ function FixProgressRow({f,timeline,scanDate}:{f:{id:string;category:string;titl
   {f.status!=="done"&&<p style={{fontSize:"11px",color:"var(--sky)",marginTop:"10px",paddingTop:"10px",borderTop:"1px dashed var(--line)"}}>Check back after your next scheduled scan to see if this moves forward.</p>}
  </article>;
 }
+// Summary export: one compact line per selected fix -- category, title, status, impact.
+// No timeline, no rationale, no generated content -- that's what Detailed is for.
+function FixSummaryRow({f}:{f:FprItem}){
+ return <div style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px 14px",border:"1px solid var(--line)",borderRadius:"7px"}}>
+  <span className={`fix-type ${fixCategoryClass(f.category)}`} style={{flexShrink:0}}>{FIX_CATEGORY_LABEL[f.category]||f.category}</span>
+  <span style={{flex:1,fontSize:"12.5px",fontWeight:600,color:"var(--ink)"}}>{f.title}</span>
+  {f.impactLabel&&<span style={{fontSize:"11px",color:"var(--em)",fontWeight:600,flexShrink:0}}>{f.impactLabel}</span>}
+  <span style={{fontSize:"10.5px",fontWeight:700,padding:"3px 9px",borderRadius:"99px",flexShrink:0,background:f.status==="done"?"var(--em-d)":f.status==="implementing"?"var(--sky-d)":"var(--soft)",color:f.status==="done"?"var(--em)":f.status==="implementing"?"var(--sky)":"var(--muted)"}}>{fixStatusLabel[f.status]||f.status}</span>
+ </div>;
+}
+// Detailed export: everything -- rationale, the generated fix content itself, impact,
+// and the full status-change timeline. This is the "complete AI fix details" view.
+function FixDetailRow({f,timeline,scanDate}:{f:FprItem;timeline:{fromStatus:string|null;toStatus:string;createdAt:string}[];scanDate:string|null}){
+ return <article className="panel" style={{padding:"18px 20px"}}>
+  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:"12px",marginBottom:"8px"}}>
+   <div><span className={`fix-type ${fixCategoryClass(f.category)}`}>{FIX_CATEGORY_LABEL[f.category]||f.category}</span><h3 style={{margin:"6px 0 0",font:"700 14px 'Outfit',system-ui",color:"var(--ink)"}}>{f.title}</h3></div>
+   <span style={{fontSize:"10.5px",fontWeight:700,padding:"4px 10px",borderRadius:"99px",flexShrink:0,background:f.status==="done"?"var(--em-d)":f.status==="implementing"?"var(--sky-d)":"var(--soft)",color:f.status==="done"?"var(--em)":f.status==="implementing"?"var(--sky)":"var(--muted)"}}>{fixStatusLabel[f.status]||f.status}</span>
+  </div>
+  <div style={{display:"flex",gap:"18px",fontSize:"11.5px",color:"var(--muted)",marginBottom:"12px",flexWrap:"wrap"}}>
+   <span>Generated <b style={{color:"var(--ink)"}}>{formatTimestamp(f.generated,"datetime")}</b></span>
+   <span>From scan <b style={{color:"var(--ink)"}}>{scanDate?formatTimestamp(scanDate,"datetime"):"Not linked to a scan"}</b></span>
+   {f.impactLabel&&<span>Estimated lift <b style={{color:"var(--em)"}}>{f.impactLabel}</b></span>}
+  </div>
+  {f.rationale&&<p style={{fontSize:"12.5px",color:"var(--ink)",lineHeight:1.6,margin:"0 0 12px"}}>{f.rationale}</p>}
+  {f.generatedContent&&<pre style={{whiteSpace:"pre-wrap",fontSize:"11px",background:"var(--soft,#f7f6fb)",padding:"12px",borderRadius:"8px",margin:"0 0 12px",lineHeight:1.6,color:"var(--ink)",fontFamily:"inherit"}}>{f.generatedContent}</pre>}
+  <div style={{borderTop:"1px solid var(--line)",paddingTop:"10px",display:"grid",gap:"6px"}}>
+   {timeline.length===0
+    ?<div style={{fontSize:"11.5px",color:"var(--muted)"}}>No status changes recorded yet.</div>
+    :timeline.map((t,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:"8px",fontSize:"11.5px",color:"var(--muted)"}}><span style={{width:"6px",height:"6px",borderRadius:"50%",background:t.toStatus==="done"?"var(--em)":t.toStatus==="implementing"?"var(--sky)":"var(--faint)",flexShrink:0}}/>{t.fromStatus?`${fixStatusLabel[t.fromStatus]||t.fromStatus} → ${fixStatusLabel[t.toStatus]||t.toStatus}`:`Generated as ${fixStatusLabel[t.toStatus]||t.toStatus}`} on {formatTimestamp(t.createdAt,"datetime")}</div>)}
+  </div>
+ </article>;
+}
 
 function FixesProgressReport({demo,brand}:{demo:boolean;brand?:Brand}){
  const [statusTab,setStatusTab]=useState<string>("all");
+ const [exportMode,setExportMode]=useState<"summary"|"detailed">("detailed");
+ function exportPdf(mode:"summary"|"detailed"){setExportMode(mode);setTimeout(()=>window.print(),0)}
  const [fixes,setFixes]=useState<Fix[]>([]);
  const [history,setHistory]=useState<Record<string,{fromStatus:string|null;toStatus:string;createdAt:string}[]>>({});
  const [scanDates,setScanDates]=useState<Record<string,string|null>>({});
  const [loading,setLoading]=useState(!demo);
+ // Per-fix export selection. Unset === selected -- so every fix is included by default
+ // ("export all") until the user unchecks specific ones.
+ const [checked,setChecked]=useState<Record<string,boolean>>({});
+ function isChecked(id:string){return checked[id]!==false}
+ function toggleChecked(id:string){setChecked(c=>({...c,[id]:!isChecked(id)}))}
 
  useEffect(()=>{
   if(demo||!brand){setLoading(false);return}
@@ -1102,11 +1156,13 @@ function FixesProgressReport({demo,brand}:{demo:boolean;brand?:Brand}){
   return ()=>{cancelled=true};
  },[demo,brand]);
 
- const items=demo
-  ?DEMO_FIXES.map(f=>({id:f.id,category:f.category,title:f.title,status:f.status,generated:"2026-08-04T09:12:00Z",scanRunId:null as string|null}))
-  :fixes.map(f=>({id:f.id,category:f.category,title:f.title,status:f.status||"pending",generated:f.created_at,scanRunId:f.scan_run_id}));
+ const items:FprItem[]=demo
+  ?DEMO_FIXES.map(f=>({id:f.id,category:f.category,title:f.title,status:f.status,generated:"2026-08-04T09:12:00Z",scanRunId:null,rationale:f.desc,generatedContent:null,impactLabel:f.lift?`+${f.lift}`:null}))
+  :fixes.map(f=>({id:f.id,category:f.category,title:f.title,status:f.status||"pending",generated:f.created_at,scanRunId:f.scan_run_id,rationale:f.rationale,generatedContent:f.generated_content,impactLabel:f.impact_low!=null&&f.impact_high!=null?`+${f.impact_low}–${f.impact_high}%`:null}));
  const counts=Object.fromEntries(FIX_STATUS_ORDER.map(s=>[s,s==="all"?items.length:items.filter(f=>f.status===s).length]));
  const shown=statusTab==="all"?items:items.filter(f=>f.status===statusTab);
+ const exportItems=items.filter(f=>isChecked(f.id));
+ const allChecked=items.length>0&&items.every(f=>isChecked(f.id));
 
  if(!demo&&!brand)return <p style={{color:"var(--muted)",fontSize:"13px"}}>Add a client first to see AI fixes progress.</p>;
  if(!demo&&loading)return <p>Loading…</p>;
@@ -1117,31 +1173,48 @@ function FixesProgressReport({demo,brand}:{demo:boolean;brand?:Brand}){
  const exportedAt=new Date().toISOString();
  const brandLabel=demo?"Acme Software":brand?.name||"";
  const domainLabel=demo?"acme.co":brand?.domain||"";
+ const exportCounts=Object.fromEntries(FIX_STATUS_ORDER.map(s=>[s,s==="all"?exportItems.length:exportItems.filter(f=>f.status===s).length]));
 
  return <>
   <div className="no-print" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"12px",marginBottom:"14px",flexWrap:"wrap"}}>
    <div className="fix-cat-tabs" style={{marginBottom:0}}>{FIX_STATUS_ORDER.map(s=><button key={s} className={statusTab===s?"fix-cat-tab active":"fix-cat-tab"} onClick={()=>setStatusTab(s)}><span className="dot" style={{background:s==="all"?"var(--muted)":s==="done"?"var(--em)":s==="implementing"?"var(--sky)":"var(--faint)"}}/>{FIX_STATUS_LABEL[s]}<span className="cnt">{counts[s]}</span></button>)}</div>
-   <button className="button" style={{fontSize:"12px",padding:"9px 16px"}} onClick={()=>window.print()}><FileText style={{width:"13px"}}/>Export PDF</button>
+   <div className="export-split" style={{display:"flex",gap:"6px"}}>
+    <button className="button outline" style={{fontSize:"12px",padding:"9px 14px"}} onClick={()=>exportPdf("summary")}><FileText style={{width:"13px"}}/>Export Summary</button>
+    <button className="button" style={{fontSize:"12px",padding:"9px 14px"}} onClick={()=>exportPdf("detailed")}><FileText style={{width:"13px"}}/>Export Detailed</button>
+   </div>
   </div>
+  <label className="no-print" style={{display:"flex",alignItems:"center",gap:"8px",fontSize:"12px",color:"var(--muted)",marginBottom:"10px",cursor:"pointer"}}>
+   <input type="checkbox" checked={allChecked} onChange={e=>{const val=e.target.checked;setChecked(Object.fromEntries(items.map(f=>[f.id,val])))}}/>
+   {allChecked?"All fixes selected for export":`${exportItems.length} of ${items.length} fixes selected for export`}
+  </label>
   <div className="no-print" style={{display:"grid",gap:"10px"}}>
-   {shown.map(f=><FixProgressRow key={f.id} f={f} timeline={timelineFor(f.id)} scanDate={scanDateFor(f)}/>)}
+   {shown.map(f=><div key={f.id} style={{display:"flex",gap:"10px",alignItems:"flex-start"}}>
+    <input type="checkbox" checked={isChecked(f.id)} onChange={()=>toggleChecked(f.id)} style={{marginTop:"22px",flexShrink:0}} aria-label={`Include "${f.title}" in export`}/>
+    <div style={{flex:1,minWidth:0}}><FixProgressRow f={f} timeline={timelineFor(f.id)} scanDate={scanDateFor(f)}/></div>
+   </div>)}
   </div>
-  {/* Always the complete, unfiltered list -- an export should hold up as a full record
-      regardless of which status tab happened to be active on screen when it was printed. */}
-  <div className="fpr-print-doc">
+  {/* The exported document reflects the checkbox selection above, not the on-screen status
+      filter -- an export should hold up as a deliberate, chosen record, not an artifact of
+      whichever status tab happened to be active. data-export-mode drives the @media print
+      rules in globals.css that swap between the compact .summary-only list and the full
+      .detail-only list (rationale, generated content, status timeline). */}
+  <div className="fpr-print-doc" data-export-mode={exportMode}>
    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",borderBottom:"2px solid var(--ink)",paddingBottom:"16px",marginBottom:"16px"}}>
     <div>
      <div style={{font:"700 14px 'Outfit',system-ui"}}>a<span style={{color:"var(--sky)"}}>askvisibleai</span></div>
      <div style={{font:"700 20px 'Outfit',system-ui",margin:"10px 0 2px"}}>AI Fixes progress report</div>
      <div style={{fontSize:"11.5px",color:"var(--muted)"}}>{brandLabel}{domainLabel&&` · ${domainLabel}`}</div>
     </div>
-    <div style={{textAlign:"right",fontSize:"11px",color:"var(--muted)"}}>Exported {formatTimestamp(exportedAt,"datetime")}<br/>All fixes, all statuses</div>
+    <div style={{textAlign:"right",fontSize:"11px",color:"var(--muted)"}}>Exported {formatTimestamp(exportedAt,"datetime")}<br/>{exportMode==="summary"?"Summary":"Detailed"} — {exportItems.length} of {items.length} fixes</div>
    </div>
    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",borderBottom:"1px solid var(--line)",marginBottom:"16px"}}>
-    {FIX_STATUS_ORDER.map((s,i)=><div key={s} style={{padding:"12px 16px",textAlign:"center",borderLeft:i>0?"1px solid var(--line)":undefined}}><b style={{display:"block",font:"800 24px 'Outfit',system-ui",color:s==="done"?"var(--em)":s==="implementing"?"var(--sky)":"var(--ink)"}}>{counts[s]}</b><span style={{fontSize:"10px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:".4px"}}>{s==="all"?"Total fixes":FIX_STATUS_LABEL[s]}</span></div>)}
+    {FIX_STATUS_ORDER.map((s,i)=><div key={s} style={{padding:"12px 16px",textAlign:"center",borderLeft:i>0?"1px solid var(--line)":undefined}}><b style={{display:"block",font:"800 24px 'Outfit',system-ui",color:s==="done"?"var(--em)":s==="implementing"?"var(--sky)":"var(--ink)"}}>{exportCounts[s]}</b><span style={{fontSize:"10px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:".4px"}}>{s==="all"?"Total fixes":FIX_STATUS_LABEL[s]}</span></div>)}
    </div>
-   <div style={{display:"grid",gap:"10px"}}>
-    {items.map(f=><FixProgressRow key={f.id} f={f} timeline={timelineFor(f.id)} scanDate={scanDateFor(f)}/>)}
+   <div className="summary-only" style={{display:"grid",gap:"8px"}}>
+    {exportItems.map(f=><FixSummaryRow key={f.id} f={f}/>)}
+   </div>
+   <div className="detail-only" style={{display:"grid",gap:"10px"}}>
+    {exportItems.map(f=><FixDetailRow key={f.id} f={f} timeline={timelineFor(f.id)} scanDate={scanDateFor(f)}/>)}
    </div>
   </div>
  </>;
@@ -1188,7 +1261,8 @@ function ReportTrafficSection({traffic}:{traffic:ReportDetail["traffic"]}){
  </div>;
 }
 function ReportViewer({runId,report,loading,history,onClose}:{runId:string;report:ReportDetail|null;loading:boolean;history:ScanHistoryEntry[];onClose:()=>void}){
- function printReport(){window.print()}
+ const [exportMode,setExportMode]=useState<"summary"|"detailed">("detailed");
+ function printReport(mode:"summary"|"detailed"){setExportMode(mode);setTimeout(()=>window.print(),0)}
  const [expandedId,setExpandedId]=useState<string|null>(null);
  const histIdx=history.findIndex(h=>h.runId===runId);
  const prevEntry=histIdx>0?history[histIdx-1]:null;
@@ -1199,10 +1273,14 @@ function ReportViewer({runId,report,loading,history,onClose}:{runId:string;repor
  const engineBreakdown=report?groupByEngineRaw(report.answers):[];
  const trendData=history.length>=2?history.map(h=>({label:h.completedAt?new Date(h.completedAt).toLocaleDateString(undefined,{month:"short",day:"numeric"}):"—",value:h.score})):[];
  return <div className="rv-overlay" onClick={onClose}>
-  <div className="rv-panel" onClick={e=>e.stopPropagation()}>
+  <div className="rv-panel" data-export-mode={exportMode} onClick={e=>e.stopPropagation()}>
    <div className="rv-actions no-print">
     <span style={{fontSize:"12px",fontWeight:700,color:"var(--ink)"}}>Scan Report{report?` — ${report.brand.name}`:""}</span>
-    <div style={{display:"flex",gap:"8px"}}><button className="button" onClick={printReport} style={{fontSize:"12px",padding:"7px 14px"}}><FileText style={{width:"13px"}}/>Export PDF</button><button className="icon-btn" onClick={onClose}><X/></button></div>
+    <div style={{display:"flex",gap:"8px"}}>
+     <button className="button outline" onClick={()=>printReport("summary")} style={{fontSize:"12px",padding:"7px 14px"}}><FileText style={{width:"13px"}}/>Export Summary</button>
+     <button className="button" onClick={()=>printReport("detailed")} style={{fontSize:"12px",padding:"7px 14px"}}><FileText style={{width:"13px"}}/>Export Detailed</button>
+     <button className="icon-btn" onClick={onClose}><X/></button>
+    </div>
    </div>
    {loading&&<div style={{padding:"80px",textAlign:"center"}}><LoaderCircle className="spin" style={{width:"32px",color:"var(--sky)"}}/></div>}
    {!loading&&!report&&<div style={{padding:"48px",textAlign:"center",color:"var(--muted)"}}><AlertCircle style={{width:"32px",marginBottom:"12px"}}/><p>Couldn&apos;t load this report.</p></div>}
@@ -1243,7 +1321,7 @@ function ReportViewer({runId,report,loading,history,onClose}:{runId:string;repor
       </div>)}
      </div>
     </div>
-    <div className="rv-section">
+    <div className="rv-section detail-only">
      <div className="rv-section-title">Prompt results ({report.answers.length}) <span style={{fontWeight:400,fontSize:"11px",color:"var(--muted)",textTransform:"none",letterSpacing:0}}>— click a row to view the full response</span></div>
      <div className="table-wrap"><table><thead><tr><th style={{width:"24px"}}></th><th>Prompt</th><th>Engine</th><th>Status</th><th>Position</th><th>Sentiment</th></tr></thead><tbody>{report.answers.map(a=>{const open=expandedId===a.id;return <Fragment key={a.id}>
       <tr onClick={()=>setExpandedId(open?null:a.id)} style={{cursor:"pointer"}}>
@@ -1262,7 +1340,13 @@ function ReportViewer({runId,report,loading,history,onClose}:{runId:string;repor
     </div>
     {report.fixes.length>0&&<div className="rv-section">
      <div className="rv-section-title">AI-recommended fixes ({report.fixes.length})</div>
-     <div style={{display:"grid",gap:"10px"}}>
+     {/* Summary export: title + category + status + impact only. Detailed: full rationale
+         and created-date per fix, matching the AI Fixes progress report's Summary/Detailed
+         split. */}
+     <div className="summary-only" style={{display:"grid",gap:"8px"}}>
+      {report.fixes.slice(0,6).map(f=><FixSummaryRow key={f.id} f={{id:f.id,category:f.category,title:f.title,status:f.status,generated:f.created_at||"",scanRunId:null,rationale:f.rationale,generatedContent:null,impactLabel:f.impact_low!=null&&f.impact_high!=null?`+${f.impact_low}–${f.impact_high}%`:null}}/>)}
+     </div>
+     <div className="detail-only" style={{display:"grid",gap:"10px"}}>
       {report.fixes.slice(0,6).map(f=><div key={f.id} style={{border:"1px solid var(--line)",borderRadius:"8px",padding:"14px 16px"}}>
        <div style={{display:"flex",gap:"10px",alignItems:"flex-start"}}>
         <span style={{fontSize:"10px",fontWeight:700,padding:"3px 8px",borderRadius:"4px",background:"var(--sky-d,#E0F2FE)",color:"var(--sky)",flexShrink:0,marginTop:"1px"}}>{f.category.toUpperCase()}</span>
@@ -1271,8 +1355,8 @@ function ReportViewer({runId,report,loading,history,onClose}:{runId:string;repor
       </div>)}
      </div>
     </div>}
-    <ReportSeoAuditSection seoAudit={report.seoAudit}/>
-    <ReportTrafficSection traffic={report.traffic}/>
+    <div className="detail-only"><ReportSeoAuditSection seoAudit={report.seoAudit}/></div>
+    <div className="detail-only"><ReportTrafficSection traffic={report.traffic}/></div>
     <div className="rv-footer"><span style={{fontWeight:700,color:"var(--muted)"}}>a<span style={{color:"var(--sky)"}}>askvisibleai</span></span><span>Generated {formatTimestamp(new Date().toISOString(),"datetime")}</span></div>
    </>}
   </div>

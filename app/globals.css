@@ -477,6 +477,11 @@ td .up,td .down{display:flex;align-items:center}td svg{width:12px}
   .rv-section details>*{display:block!important}
   .rv-section summary{cursor:default!important}
   .rv-section summary::-webkit-details-marker{display:none}
+  /* Summary export: hide itemized detail sections (prompt results, fixes list, SEO audit,
+     traffic), keep score/count-level rollups. On the AI Fixes progress report specifically,
+     Summary shows the compact .summary-only list instead of the rich .detail-only one. */
+  [data-export-mode="summary"] .detail-only{display:none!important}
+  [data-export-mode="detailed"] .summary-only{display:none!important}
 }
 
 /* Settings */
