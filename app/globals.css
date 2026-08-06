@@ -266,6 +266,10 @@ button,input,textarea{font:inherit}button,a{cursor:pointer}a{text-decoration:non
 .panel-head p{font-size:11px;color:var(--muted);margin:3px 0 0}
 .panel-head button{border:0;background:transparent;color:var(--muted);font-size:11px;display:flex;gap:4px;align-items:center}
 .panel-head button svg{width:14px}
+/* "View all"-style panel-head links, styled to match the Run scan button's filled sky-blue
+   accent instead of the default muted-gray panel-head button. */
+.panel-head button.view-all{background:var(--sky);color:#fff;border-radius:7px;padding:6px 11px;font-weight:700}
+.panel-head button.view-all:hover{background:#0284C7}
 .chart-legend{display:flex;justify-content:flex-end;gap:14px;font-size:11px;color:var(--muted)}
 .chart-legend span{display:flex;align-items:center;gap:5px}
 .chart-legend i{width:14px;height:2px;background:var(--sky)}
@@ -456,9 +460,13 @@ td .up,td .down{display:flex;align-items:center}td svg{width:12px}
    status filter, so the on-screen filtered list (.no-print) is hidden and this dedicated,
    unfiltered document (hidden on-screen, shown only in print) takes over. */
 .fpr-print-doc{display:none}
+/* SEO audit report export -- same pattern as .fpr-print-doc: hidden on-screen, shown only
+   in print, so the on-screen filtered/browsable report and the printed document don't
+   have to be the same layout. */
+.sar-print-doc{display:none}
 @media print{
   .overview-tabs,.fix-cat-tabs{display:none!important}
-  .fpr-print-doc{display:block!important}
+  .fpr-print-doc,.sar-print-doc{display:block!important}
 }
 /* Print / PDF export */
 @media print{

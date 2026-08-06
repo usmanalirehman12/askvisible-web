@@ -20,7 +20,7 @@ import { isNewAccount } from "@/lib/onboarding/checklistState";
 
 const engines=[{name:"ChatGPT",short:"G",color:"green"},{name:"Gemini",short:"◆",color:"blue"},{name:"Perplexity",short:"P",color:"teal"},{name:"Claude",short:"C",color:"orange"},{name:"DeepSeek",short:"D",color:"crimson"},{name:"AI Overviews",short:"◈",color:"cobalt"}];
 const engineByKey:Record<string,{name:string;short:string;color:string}>={openai:engines[0],gemini:engines[1],perplexity:engines[2],anthropic:engines[3],deepseek:engines[4],ai_overviews:engines[5]};
-const nav=[{id:"overview",label:"Overview",icon:LayoutDashboard},{id:"prompts",label:"Prompts",icon:Search},{id:"answers",label:"Answers",icon:MessageSquare},{id:"competitors",label:"Competitors",icon:Users},{id:"fixes",label:"AI Fixes",icon:WandSparkles},{id:"reports",label:"Reports",icon:FileText}];
+const nav=[{id:"overview",label:"Overview",icon:LayoutDashboard},{id:"prompts",label:"Prompts",icon:Search},{id:"answers",label:"Answers",icon:MessageSquare},{id:"competitors",label:"Competitors",icon:Users},{id:"fixes",label:"AI Fixes",icon:WandSparkles},{id:"seo-audit",label:"SEO Audit",icon:Globe},{id:"reports",label:"Reports",icon:FileText}];
 const demoEngines=[{name:"ChatGPT",short:"G",score:74,color:"green"},{name:"Gemini",short:"◆",score:68,color:"blue"},{name:"Perplexity",short:"P",score:61,color:"teal"},{name:"Claude",short:"C",score:54,color:"orange"},{name:"DeepSeek",short:"D",score:48,color:"crimson"},{name:"AI Overviews",short:"◈",score:55,color:"cobalt"}];
 // Relative to page-load time (not hardcoded past dates) so the 7/15/30-day range picker on
 // Overview always has something real to filter regardless of when the demo is viewed —
@@ -44,7 +44,7 @@ export default function AppPage(){
  const demo=!supabaseConfigured();
  const [section,setSection]=useState("overview"),[scanning,setScanning]=useState(false),[open,setOpen]=useState(false),[toast,setToast]=useState("");
  const [confirmScanOpen,setConfirmScanOpen]=useState(false);
- const [reportsTab,setReportsTab]=useState<"scans"|"fixes">("scans");
+ const [reportsTab,setReportsTab]=useState<"scans"|"fixes"|"seo">("scans");
  const [scanProgress,setScanProgress]=useState<{done:number;total:number}|null>(null);
  const [ctx,setCtx]=useState<WorkspaceContext|null>(null);
  const [ctxLoading,setCtxLoading]=useState(!demo);
@@ -157,7 +157,7 @@ export default function AppPage(){
    </div>
   </aside>
   <section className="app-content"><header className="app-header"><button className="menu-btn" onClick={()=>setOpen(true)}><Menu/></button><div className="header-search"><Search/><input placeholder="Search prompts, reports, fixes…"/><kbd>⌘ K</kbd></div><div className="header-actions"><button className="icon-btn"><Bell/><i/></button><button className="icon-btn theme-toggle" onClick={toggleTheme} title={theme==='light'?'Switch to dark mode':'Switch to light mode'} aria-label="Toggle theme">{theme==='light'?<Moon size={18}/>:<Sun size={18}/>}</button><button className="scan-btn" onClick={()=>demo?scan():setConfirmScanOpen(true)} disabled={scanning}>{scanning?<LoaderCircle className="spin"/>:<Play/>}{scanning?(scanProgress?`${scanProgress.done}/${scanProgress.total} prompts…`:"Starting…"):"Run scan"}</button></div></header>
-    <div className="app-page">{section==="overview"?<Overview demo={demo} brand={activeBrand} refreshKey={refreshKey} scan={scan} scanning={scanning} setSection={setSection} firstName={firstName}/>:section==="prompts"?<Prompts demo={demo} brand={activeBrand} refreshKey={refreshKey} newUser={isNewUser}/>:section==="answers"?<Answers demo={demo} brand={activeBrand} refreshKey={refreshKey} scan={scan} scanning={scanning} newUser={isNewUser}/>:section==="fixes"?<Fixes demo={demo} brand={activeBrand} refreshKey={refreshKey} newUser={isNewUser} onViewProgressReport={()=>{setReportsTab("fixes");setSection("reports")}}/>:section==="competitors"?<Competitors demo={demo} brand={activeBrand} newUser={isNewUser}/>:section==="reports"?<Reports demo={demo} brand={activeBrand} refreshKey={refreshKey} newUser={isNewUser} reportsTab={reportsTab} setReportsTab={setReportsTab}/>:<SettingsPage demo={demo} brand={activeBrand} ctx={ctx} newUser={isNewUser} onBrandUpdated={updated=>setCtx(c=>c?{...c,brands:c.brands.map(b=>b.id===updated.id?{...b,...updated}:b)}:c)}/>}</div>
+    <div className="app-page">{section==="overview"?<Overview demo={demo} brand={activeBrand} refreshKey={refreshKey} scan={scan} scanning={scanning} setSection={setSection} firstName={firstName}/>:section==="prompts"?<Prompts demo={demo} brand={activeBrand} refreshKey={refreshKey} newUser={isNewUser}/>:section==="answers"?<Answers demo={demo} brand={activeBrand} refreshKey={refreshKey} scan={scan} scanning={scanning} newUser={isNewUser}/>:section==="fixes"?<Fixes demo={demo} brand={activeBrand} refreshKey={refreshKey} newUser={isNewUser} onViewProgressReport={()=>{setReportsTab("fixes");setSection("reports")}}/>:section==="seo-audit"?<SeoAuditPage demo={demo} brand={activeBrand} onViewProgressReport={()=>{setReportsTab("seo");setSection("reports")}}/>:section==="competitors"?<Competitors demo={demo} brand={activeBrand} newUser={isNewUser}/>:section==="reports"?<Reports demo={demo} brand={activeBrand} refreshKey={refreshKey} newUser={isNewUser} reportsTab={reportsTab} setReportsTab={setReportsTab}/>:<SettingsPage demo={demo} brand={activeBrand} ctx={ctx} newUser={isNewUser} onBrandUpdated={updated=>setCtx(c=>c?{...c,brands:c.brands.map(b=>b.id===updated.id?{...b,...updated}:b)}:c)}/>}</div>
   </section>
   <CoachMarkTour demo={demo} active={section==="overview"}/>
   {confirmScanOpen&&typeof document!=="undefined"&&createPortal(<div className="modal-back"><div className="modal">
@@ -321,8 +321,8 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
    </div>
    <div className="dashboard-grid" style={{gridTemplateColumns:"1fr"}}>
    <article className="panel engine-panel"><PanelHead title="Visibility by engine" sub="Last 30 days"/>{demoEngines.map(e=><div className="engine-row" key={e.name}><span className={`engine-logo ${e.color}`}>{e.short}</span><div><b>{e.name}</b><i><span style={{width:e.score+"%"}}/></i></div><strong>{e.score}%</strong></div>)}<button className="panel-link" onClick={()=>setSection("prompts")}>View prompt details <ArrowUpRight/></button></article>
-   <article className="panel prompt-panel"><PanelHead title="Recent prompt performance" sub="Latest results across all engines" action={<button onClick={()=>setSection("prompts")}>View all <ArrowUpRight/></button>}/><DemoPromptTable short/></article>
-   <article className="panel opportunities"><PanelHead title="Top opportunities" sub="AI-recommended actions ranked by impact" action={<button onClick={()=>setSection("fixes")}>View all</button>}/>{[{t:"Add direct comparison content",p:"Your competitors win 14 prompts with comparison pages.",impact:"High",lift:"+12–18%"},{t:"Strengthen third-party citations",p:"AI engines cite 3 sources that don't mention your brand.",impact:"High",lift:"+8–14%"},{t:"Add SoftwareApplication schema",p:"Help engines understand your product entity and pricing.",impact:"Med",lift:"+4–7%"}].map(o=><div className="opportunity" key={o.t}><span className="opp-icon"><Sparkles/></span><div><b>{o.t}</b><p>{o.p}</p><small><em className={o.impact==="High"?"high":"medium"}>{o.impact} impact</em>Estimated lift <strong>{o.lift}</strong></small></div><button onClick={()=>setSection("fixes")}>Fix this <ArrowUpRight/></button></div>)}</article>
+   <article className="panel prompt-panel"><PanelHead title="Recent prompt performance" sub="Latest results across all engines" action={<button className="view-all" onClick={()=>setSection("prompts")}>View all <ArrowUpRight/></button>}/><DemoPromptTable short/></article>
+   <article className="panel opportunities"><PanelHead title="Top opportunities" sub="AI-recommended actions ranked by impact" action={<button className="view-all" onClick={()=>setSection("fixes")}>View all</button>}/>{[{t:"Add direct comparison content",p:"Your competitors win 14 prompts with comparison pages.",impact:"High",lift:"+12–18%"},{t:"Strengthen third-party citations",p:"AI engines cite 3 sources that don't mention your brand.",impact:"High",lift:"+8–14%"},{t:"Add SoftwareApplication schema",p:"Help engines understand your product entity and pricing.",impact:"Med",lift:"+4–7%"}].map(o=><div className="opportunity" key={o.t}><span className="opp-icon"><Sparkles/></span><div><b>{o.t}</b><p>{o.p}</p><small><em className={o.impact==="High"?"high":"medium"}>{o.impact} impact</em>Estimated lift <strong>{o.lift}</strong></small></div><button onClick={()=>setSection("fixes")}>Fix this <ArrowUpRight/></button></div>)}</article>
    </div>
   </>}
   {overviewTab==="traffic"&&<GscTrafficTab demo brandId={undefined}/>}
@@ -360,9 +360,9 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
    </div>
    <div className="dashboard-grid" style={{gridTemplateColumns:"1fr"}}>
     <article className="panel engine-panel"><PanelHead title="Visibility by engine" sub="Most recent scan"/>{byEngine.map(e=><div className="engine-row" key={e.key}><span className={`engine-logo ${e.color}`}>{e.short}</span><div><b>{e.name}</b><i><span style={{width:e.pct+"%"}}/></i></div><strong>{e.pct}%</strong></div>)}<button className="panel-link" onClick={()=>setSection("prompts")}>View prompt details <ArrowUpRight/></button></article>
-    <article className="panel prompt-panel"><PanelHead title="Recent prompt performance" sub="Latest results across all engines" action={<button onClick={()=>setSection("prompts")}>View all <ArrowUpRight/></button>}/><RealPromptTable answers={latest.answers.slice(0,4)}/></article>
+    <article className="panel prompt-panel"><PanelHead title="Recent prompt performance" sub="Latest results across all engines" action={<button className="view-all" onClick={()=>setSection("prompts")}>View all <ArrowUpRight/></button>}/><RealPromptTable answers={latest.answers.slice(0,4)}/></article>
    </div>
-   {fixes.length>0&&<article className="panel opportunities" style={{marginTop:"14px"}}><PanelHead title="Top AI-generated fixes" sub="Claude&apos;s recommendations from your most recent scan" action={<button onClick={()=>setSection("fixes")}>View all <ArrowUpRight/></button>}/>{fixes.slice(0,3).map(f=><div className="opportunity" key={f.id}><span className="opp-icon"><Sparkles/></span><div><b>{f.title}</b><p>{f.rationale}</p><small><em className={(f.impact_high||0)>=12?"high":"medium"}>{(f.impact_high||0)>=12?"High":"Med"} impact</em>Estimated lift <strong>+{f.impact_low}–{f.impact_high}%</strong></small></div><button onClick={()=>setSection("fixes")}>View fix <ArrowUpRight/></button></div>)}</article>}
+   {fixes.length>0&&<article className="panel opportunities" style={{marginTop:"14px"}}><PanelHead title="Top AI-generated fixes" sub="Claude&apos;s recommendations from your most recent scan" action={<button className="view-all" onClick={()=>setSection("fixes")}>View all <ArrowUpRight/></button>}/>{fixes.slice(0,3).map(f=><div className="opportunity" key={f.id}><span className="opp-icon"><Sparkles/></span><div><b>{f.title}</b><p>{f.rationale}</p><small><em className={(f.impact_high||0)>=12?"high":"medium"}>{(f.impact_high||0)>=12?"High":"Med"} impact</em>Estimated lift <strong>+{f.impact_low}–{f.impact_high}%</strong></small></div><button onClick={()=>setSection("fixes")}>View fix <ArrowUpRight/></button></div>)}</article>}
   </>}
   {overviewTab==="traffic"&&<GscTrafficTab demo={false} brandId={brand?.id}/>}
   {overviewTab==="rankings"&&<RankingsDetail demo={false} answers={latest.answers}/>}
@@ -795,7 +795,6 @@ const DEMO_FIXES=[
 ];
 
 function Fixes({demo,brand,refreshKey,newUser,onViewProgressReport}:{demo:boolean;brand?:Brand;refreshKey:number;newUser:boolean;onViewProgressReport:()=>void}){
- const [fixesTab,setFixesTab]=useState<"fixes"|"seo">("fixes");
  const [fixes,setFixes]=useState<Fix[]>([]);
  const [loading,setLoading]=useState(!demo);
  const [updatingId,setUpdatingId]=useState<string|null>(null);
@@ -823,27 +822,31 @@ function Fixes({demo,brand,refreshKey,newUser,onViewProgressReport}:{demo:boolea
  }
 
  const pageHeader=<><div className="page-title"><div><span className="overline">AI FIX GENERATOR</span><h1>Turn gaps into growth</h1><p>{demo?"Actionable recommendations based on where competitors beat you.":brand?`Recommendations for ${brand.name} from your most recent scan.`:"Add a client and run a scan to generate recommendations."}</p></div><button className="button outline" onClick={onViewProgressReport}>View progress report</button></div><TabTip tabId="fixes" newUser={newUser} text="After a scan, Claude suggests specific fixes to improve your score — track each one from pending to done."/></>;
- const tabBar=<div className="overview-tabs" style={{marginBottom:"14px"}}><button className={fixesTab==="fixes"?"active":""} onClick={()=>setFixesTab("fixes")}><WandSparkles size={14}/>AI Visibility Fixes</button><button className={fixesTab==="seo"?"active":""} onClick={()=>setFixesTab("seo")}><Globe size={14}/>SEO Audit</button></div>;
-
- if(fixesTab==="seo") return <>{pageHeader}{tabBar}<SeoAuditTab demo={demo} brand={brand}/></>;
 
  if(demo){
   const shown=catTab==="all"?DEMO_FIXES:DEMO_FIXES.filter(f=>f.category===catTab);
-  return <>{pageHeader}{tabBar}
+  return <>{pageHeader}
    <FixCategoryTabs items={DEMO_FIXES} active={catTab} onChange={setCatTab}/>
    <div className="fix-grid">{shown.map(f=><article className="fix-card" key={f.id}><div><span className={`fix-type ${fixCategoryClass(f.category)}`}>{FIX_CATEGORY_LABEL[f.category]}</span></div><span className="big-fix-icon"><WandSparkles/></span><h3>{f.title}</h3><p>{f.desc}</p><div className="lift"><span>Estimated lift<b>{f.lift}</b></span><span>Time to implement<b>{f.effort}</b></span></div><FixStatusControl status={demoStatus[f.id]} busy={false} onSet={s=>setDemoStatus(prev=>({...prev,[f.id]:s}))}/></article>)}</div>
   </>;
  }
 
- if(!brand)return <>{pageHeader}{tabBar}<p style={{color:"var(--muted)",fontSize:"13px"}}>Add a client first to generate AI fixes.</p></>;
- if(loading)return <>{pageHeader}{tabBar}</>;
- if(!fixes.length)return <>{pageHeader}{tabBar}<div className="panel" style={{padding:"32px",textAlign:"center"}}><WandSparkles style={{width:"32px",color:"var(--faint)",marginBottom:"12px"}}/><p style={{margin:"0 0 6px",fontWeight:600}}>No fixes yet for {brand.name}</p><p style={{margin:0,fontSize:"13px",color:"var(--muted)"}}>Click <b>Run scan</b> — Claude generates fix suggestions automatically from the results.</p></div></>;
+ if(!brand)return <>{pageHeader}<p style={{color:"var(--muted)",fontSize:"13px"}}>Add a client first to generate AI fixes.</p></>;
+ if(loading)return <>{pageHeader}</>;
+ if(!fixes.length)return <>{pageHeader}<div className="panel" style={{padding:"32px",textAlign:"center"}}><WandSparkles style={{width:"32px",color:"var(--faint)",marginBottom:"12px"}}/><p style={{margin:"0 0 6px",fontWeight:600}}>No fixes yet for {brand.name}</p><p style={{margin:0,fontSize:"13px",color:"var(--muted)"}}>Click <b>Run scan</b> — Claude generates fix suggestions automatically from the results.</p></div></>;
 
  const shown=catTab==="all"?fixes:fixes.filter(f=>f.category===catTab);
 
- return <>{pageHeader}{tabBar}
+ return <>{pageHeader}
   <FixCategoryTabs items={fixes} active={catTab} onChange={setCatTab}/>
   <div className="fix-grid">{shown.map(f=>{const busy=updatingId===f.id;const st=f.status||"pending";return <article className="fix-card" key={f.id}><div><span className={`fix-type ${fixCategoryClass(f.category)}`}>{FIX_CATEGORY_LABEL[f.category]||f.category}</span></div><span className="big-fix-icon"><WandSparkles/></span><h3>{f.title}</h3><p>{f.rationale}</p>{f.generated_content&&<FixContent content={f.generated_content}/>}<div className="lift"><span>Estimated lift<b>+{f.impact_low}–{f.impact_high}%</b></span><span>Added<b>{formatTimestamp(f.created_at,"date")}</b></span></div><FixStatusControl status={st} busy={busy} onSet={s=>setStatus(f.id,s)}/></article>})}</div>
+ </>;
+}
+
+function SeoAuditPage({demo,brand,onViewProgressReport}:{demo:boolean;brand?:Brand;onViewProgressReport:()=>void}){
+ return <>
+  <div className="page-title"><div><span className="overline">SEO AUDIT</span><h1>Technical SEO health</h1><p>{demo?"Technical SEO, on-page metadata, content, links, and structured data.":brand?`Audit results for ${brand.name}.`:"Add a client to run an SEO audit."}</p></div><button className="button outline" onClick={onViewProgressReport}>View SEO report</button></div>
+  <SeoAuditTab demo={demo} brand={brand}/>
  </>;
 }
 
@@ -873,12 +876,12 @@ function SeoTrendPill({trend}:{trend?:IssueTrend}){
  return <span style={{fontSize:"9px",fontWeight:700,padding:"2px 6px",borderRadius:"4px",background:fixed?"var(--em-d,#DCFCE7)":"#FEE2E2",color:fixed?"var(--em)":"var(--cr)",marginLeft:"7px",textTransform:"uppercase",letterSpacing:".3px"}}>{fixed?"Fixed":"New"}</span>;
 }
 function SeoCheckRow({c}:{c:SeoCheck}){
- return <div style={{display:"flex",gap:"12px",alignItems:"flex-start",padding:"12px 16px",borderBottom:"1px solid var(--line)"}}>
+ return <div style={{display:"flex",gap:"12px",alignItems:"flex-start",padding:"12px 16px",borderBottom:"1px solid var(--line)",maxWidth:"100%"}}>
   <span style={{fontSize:"10px",fontWeight:800,width:"20px",height:"20px",minWidth:"20px",borderRadius:"50%",background:seoStatusBg(c.status),color:seoStatusColor(c.status),display:"flex",alignItems:"center",justifyContent:"center",marginTop:"1px"}}>{seoStatusIcon(c.status)}</span>
-  <div style={{flex:1}}>
-   <div style={{fontWeight:600,fontSize:"13px",color:"var(--ink)",display:"flex",alignItems:"center",flexWrap:"wrap"}}>{c.label}<SeoTrendPill trend={c.trend}/></div>
-   <div style={{fontSize:"12px",color:"var(--muted)",marginTop:"2px"}}>{c.message}</div>
-   {c.recommendation&&<div style={{fontSize:"11px",color:"var(--sky)",marginTop:"5px",fontWeight:600}}>→ {c.recommendation}</div>}
+  <div style={{flex:1,minWidth:0}}>
+   <div style={{fontWeight:600,fontSize:"12px",color:"var(--ink)",display:"flex",alignItems:"center",flexWrap:"wrap"}}>{c.label}<SeoTrendPill trend={c.trend}/></div>
+   <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px",overflowWrap:"break-word",wordBreak:"break-word"}}>{c.message}</div>
+   {c.recommendation&&<div style={{fontSize:"10.5px",color:"var(--sky)",marginTop:"5px",fontWeight:600,overflowWrap:"break-word",wordBreak:"break-word"}}>→ {c.recommendation}</div>}
   </div>
   <span style={{fontSize:"10px",fontWeight:700,padding:"2px 7px",borderRadius:"4px",background:seoStatusBg(c.status),color:seoStatusColor(c.status),flexShrink:0,textTransform:"uppercase"}}>{c.status}</span>
  </div>;
@@ -899,24 +902,46 @@ const DEMO_SEO_AUDIT:SeoAuditData={id:"demo",domain:"acme.co",overallScore:72,cr
  {id:"pagespeed_accessibility",label:"Accessibility score",category:"accessibility",status:"pass",message:"94/100 (Google PageSpeed, mobile)"},
 ]};
 
+type SeoAuditHistoryEntry={id:string;overallScore:number;createdAt:string;checksCount:number};
+// Newest first, matching the real /api/seo-audit/history endpoint's ordering (order by
+// created_at desc) -- callers .reverse() this when they need oldest-first for a trend chart.
+const DEMO_SEO_HISTORY:SeoAuditHistoryEntry[]=[
+ {id:"d4",overallScore:72,createdAt:new Date().toISOString(),checksCount:12},
+ {id:"d3",overallScore:67,createdAt:daysAgoIso(7),checksCount:12},
+ {id:"d2",overallScore:63,createdAt:daysAgoIso(14),checksCount:12},
+ {id:"d1",overallScore:58,createdAt:daysAgoIso(21),checksCount:12},
+];
+
 function SeoAuditTab({demo,brand}:{demo:boolean;brand?:Brand}){
  const [tab,setTab]=useState("overview");
  const [audit,setAudit]=useState<SeoAuditData|null>(null);
  const [loading,setLoading]=useState(!demo);
  const [running,setRunning]=useState(false);
  const [error,setError]=useState("");
+ const [history,setHistory]=useState<SeoAuditHistoryEntry[]>([]);
 
  async function loadLatest(){
   if(!brand)return;
   const r=await fetch(`/api/seo-audit/latest?brandId=${encodeURIComponent(brand.id)}`);
   const j=await r.json().catch(()=>({}));
   setAudit(j.audit||null);
+  const hr=await fetch(`/api/seo-audit/history?brandId=${encodeURIComponent(brand.id)}`);
+  const hj=await hr.json().catch(()=>({}));
+  setHistory(hj.audits||[]);
  }
 
  useEffect(()=>{
   if(demo||!brand){setLoading(false);return}
   let cancelled=false;
-  (async()=>{setLoading(true);const r=await fetch(`/api/seo-audit/latest?brandId=${encodeURIComponent(brand.id)}`);const j=await r.json().catch(()=>({}));if(!cancelled){setAudit(j.audit||null);setLoading(false)}})();
+  (async()=>{
+   setLoading(true);
+   const [r,hr]=await Promise.all([
+    fetch(`/api/seo-audit/latest?brandId=${encodeURIComponent(brand.id)}`),
+    fetch(`/api/seo-audit/history?brandId=${encodeURIComponent(brand.id)}`),
+   ]);
+   const [j,hj]=await Promise.all([r.json().catch(()=>({})),hr.json().catch(()=>({}))]);
+   if(!cancelled){setAudit(j.audit||null);setHistory(hj.audits||[]);setLoading(false)}
+  })();
   return ()=>{cancelled=true};
  },[demo,brand]);
 
@@ -952,15 +977,22 @@ function SeoAuditTab({demo,brand}:{demo:boolean;brand?:Brand}){
  const issues=[...data.checks].filter(c=>c.status!=="pass").sort((a,b)=>(a.status==="fail"?0:1)-(b.status==="fail"?0:1));
  const checksFor=(cat:string)=>data.checks.filter(c=>c.category===cat);
 
- return <div>
-  <div style={{display:"grid",gridTemplateColumns:"auto 1fr auto",alignItems:"center",gap:"24px",background:"var(--surface)",border:"1px solid var(--line)",borderRadius:"10px",padding:"20px 24px",marginBottom:"14px",borderLeft:`4px solid ${scoreColor}`}}>
-   <div><div style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",fontWeight:700,letterSpacing:"1px",marginBottom:"4px"}}>SEO Score</div><div style={{fontSize:"52px",fontWeight:800,fontFamily:"Outfit,system-ui",color:scoreColor,letterSpacing:"-2px",lineHeight:1}}>{data.overallScore}</div></div>
-   <div style={{display:"flex",gap:"20px",paddingLeft:"8px"}}>
-    <div style={{textAlign:"center"}}><div style={{fontSize:"24px",fontWeight:800,fontFamily:"Outfit",color:"var(--em)",letterSpacing:"-1px"}}>{passed}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>Passed</div></div>
-    <div style={{textAlign:"center"}}><div style={{fontSize:"24px",fontWeight:800,fontFamily:"Outfit",color:"var(--am)",letterSpacing:"-1px"}}>{warnings}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>Warnings</div></div>
-    <div style={{textAlign:"center"}}><div style={{fontSize:"24px",fontWeight:800,fontFamily:"Outfit",color:"var(--cr)",letterSpacing:"-1px"}}>{failed}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>Failed</div></div>
+ const trendData=(demo?DEMO_SEO_HISTORY:history).slice().reverse().map(h=>({label:formatTimestamp(h.createdAt,"date"),value:h.overallScore}));
+
+ return <div style={{maxWidth:"100%",overflowX:"hidden"}}>
+  <div data-tour="score-hero" style={{background:"var(--surface,#fff)",border:"1px solid var(--line)",borderRadius:"10px",padding:"24px 28px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"32px",borderLeft:`4px solid ${scoreColor}`,flexWrap:"wrap"}}>
+   <div>
+    <span style={{display:"block",fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--muted,#64748B)",marginBottom:"4px"}}>SEO Score</span>
+    <div style={{display:"flex",alignItems:"baseline",gap:"14px"}}>
+     <span style={{fontSize:"76px",fontWeight:800,lineHeight:1,fontFamily:"Outfit,system-ui,sans-serif",color:scoreColor,letterSpacing:"-4px"}}>{data.overallScore}</span>
+    </div>
+    <div style={{marginTop:"10px",display:"flex",gap:"20px",alignItems:"center"}}>
+     <div style={{textAlign:"center"}}><div style={{fontSize:"20px",fontWeight:800,fontFamily:"Outfit",color:"var(--em)",letterSpacing:"-1px"}}>{passed}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>Passed</div></div>
+     <div style={{textAlign:"center"}}><div style={{fontSize:"20px",fontWeight:800,fontFamily:"Outfit",color:"var(--am)",letterSpacing:"-1px"}}>{warnings}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>Warnings</div></div>
+     <div style={{textAlign:"center"}}><div style={{fontSize:"20px",fontWeight:800,fontFamily:"Outfit",color:"var(--cr)",letterSpacing:"-1px"}}>{failed}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>Failed</div></div>
+    </div>
    </div>
-   <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"6px"}}>
+   <div style={{marginLeft:"auto",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"6px"}}>
     <span style={{fontSize:"12px",color:"var(--muted)"}}>Audited: <b style={{color:"var(--ink)"}}>{data.domain}</b></span>
     <span style={{fontSize:"11px",color:"var(--muted)"}}>{formatTimestamp(data.createdAt,"datetime")}</span>
     {!demo&&<button className="button outline" onClick={runAudit} disabled={running} style={{fontSize:"12px",padding:"6px 12px"}}>{running?"Auditing…":"Re-audit"}</button>}
@@ -971,6 +1003,10 @@ function SeoAuditTab({demo,brand}:{demo:boolean;brand?:Brand}){
   <div style={{marginTop:"14px"}}>
    <TabPanel id="overview" active={tab}>
     <p style={{fontSize:"13px",color:"var(--muted)",margin:"0 0 14px",lineHeight:1.6}}>{failed>0?`${failed} check${failed!==1?"s":""} need attention, ${warnings} warning${warnings!==1?"s":""} to review.`:warnings>0?`No critical issues — ${warnings} warning${warnings!==1?"s":""} to review.`:"No issues found in this audit."}</p>
+    {trendData.length>=2&&<article className="panel" style={{padding:"20px 24px",marginBottom:"14px"}}>
+     <div style={{fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--muted)",marginBottom:"12px"}}>SEO score trend</div>
+     <ScoreTrendChart data={trendData} yMax={100} color="var(--sky)"/>
+    </article>}
     <article className="panel">{data.checks.map(c=><SeoCheckRow key={c.id} c={c}/>)}</article>
    </TabPanel>
    {(["technical","meta","content","performance","mobile","accessibility","links","schema"] as const).map(cat=>
@@ -1062,7 +1098,7 @@ type ReportDetail={
  traffic:GscData;
 };
 function groupByEngineRaw(answers:{engine:string;brand_mentioned:boolean}[]){const byKey=new Map<string,{mentioned:number;total:number}>();for(const a of answers){const e=byKey.get(a.engine)||{mentioned:0,total:0};e.total++;if(a.brand_mentioned)e.mentioned++;byKey.set(a.engine,e)}return Array.from(byKey.entries()).map(([key,{mentioned,total}])=>{const meta=engineByKey[key]||{name:key,short:key[0]?.toUpperCase()||"?",color:"green"};const pct=total?Math.round(mentioned/total*100):0;return{key,name:meta.name,short:meta.short,color:meta.color,pct}})}
-function Reports({demo,brand,refreshKey,newUser,reportsTab,setReportsTab}:{demo:boolean;brand?:Brand;refreshKey:number;newUser:boolean;reportsTab:"scans"|"fixes";setReportsTab:(t:"scans"|"fixes")=>void}){
+function Reports({demo,brand,refreshKey,newUser,reportsTab,setReportsTab}:{demo:boolean;brand?:Brand;refreshKey:number;newUser:boolean;reportsTab:"scans"|"fixes"|"seo";setReportsTab:(t:"scans"|"fixes"|"seo")=>void}){
  const {history}=useScanHistory(demo,brand,refreshKey);
  const [viewRunId,setViewRunId]=useState<string|null>(null);
  const [report,setReport]=useState<ReportDetail|null>(null);
@@ -1070,9 +1106,10 @@ function Reports({demo,brand,refreshKey,newUser,reportsTab,setReportsTab}:{demo:
  async function openReport(runId:string){setViewRunId(runId);setReportLoading(true);const r=await fetch(`/api/reports/${runId}`);const j=await r.json().catch(()=>({}));setReport(j.run?j:null);setReportLoading(false)}
  function closeReport(){setViewRunId(null);setReport(null)}
  const header=<><div className="page-title"><div><span className="overline">REPORTS</span><h1>Visibility reports</h1><p>Every scan auto-generates a full report. Click any entry to view or export.</p></div></div><TabTip tabId="reports" newUser={newUser} text="Every scan generates a shareable report here, exportable to PDF for your team or clients."/></>;
- const subTabBar=<div className="overview-tabs" style={{marginBottom:"14px"}}><button className={reportsTab==="scans"?"active":""} onClick={()=>setReportsTab("scans")}><FileText size={14}/>Complete scan reports</button><button className={reportsTab==="fixes"?"active":""} onClick={()=>setReportsTab("fixes")}><WandSparkles size={14}/>AI Fixes progress</button></div>;
+ const subTabBar=<div className="overview-tabs" style={{marginBottom:"14px"}}><button className={reportsTab==="scans"?"active":""} onClick={()=>setReportsTab("scans")}><FileText size={14}/>Complete scan reports</button><button className={reportsTab==="fixes"?"active":""} onClick={()=>setReportsTab("fixes")}><WandSparkles size={14}/>AI Fixes progress</button><button className={reportsTab==="seo"?"active":""} onClick={()=>setReportsTab("seo")}><Globe size={14}/>SEO Audit reports</button></div>;
 
  if(reportsTab==="fixes") return <>{header}{subTabBar}<FixesProgressReport demo={demo} brand={brand}/></>;
+ if(reportsTab==="seo") return <>{header}{subTabBar}<SeoAuditReport demo={demo} brand={brand}/></>;
 
  if(demo)return <>{header}{subTabBar}<div className="report-grid">{["June 2026","Q2 summary","May 2026"].map((r,i)=><article className="panel report-card" key={r}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"12px"}}><span style={{fontSize:"10px",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",color:"var(--muted)"}}>SCAN #{3-i}</span><span style={{fontSize:"10px",fontWeight:700,padding:"3px 8px",borderRadius:"99px",background:"var(--sky-d)",color:"var(--sky)"}}>Demo</span></div><div style={{display:"flex",alignItems:"flex-end",gap:"14px",marginBottom:"16px"}}><span style={{fontSize:"52px",fontWeight:800,lineHeight:1,fontFamily:"Outfit,system-ui",color:"var(--em)",letterSpacing:"-2px"}}>{67-i*4}</span><div style={{paddingBottom:"5px"}}><div style={{fontSize:"11px",color:"var(--muted)",marginBottom:"2px"}}>AI Visibility Score</div><div style={{fontSize:"12px",fontWeight:600,color:"var(--ink)"}}>{14-i*2}/25 mentions</div></div></div><button className="button" style={{fontSize:"12px",padding:"7px 14px"}}>View report <ArrowUpRight style={{width:"13px"}}/></button></article>)}</div></>;
  if(!brand)return <>{header}{subTabBar}<p style={{color:"var(--muted)",fontSize:"13px"}}>Add a client brand to start generating reports.</p></>;
@@ -1258,31 +1295,140 @@ function FixesProgressReport({demo,brand}:{demo:boolean;brand?:Brand}){
  </>;
 }
 const SEO_CATEGORY_LABEL:Record<string,string>={technical:"Technical SEO",meta:"On-page SEO",content:"Content",performance:"Performance",mobile:"Mobile",accessibility:"Accessibility",links:"Links",schema:"Structured Data"};
-// Complete audit embedded in the report, not a summary — <details> makes each category
-// collapsible on-screen; `open` by default so nothing is hidden, and print CSS
-// (globals.css) forces them open regardless of what the viewer collapsed, so the PDF
-// export always has the full audit even if the on-screen state doesn't.
+// Shared by ReportSeoAuditSection (embedded scan report) and SeoAuditReport (the dedicated
+// SEO report) so both group checks into the same collapsible-by-category layout. <details>
+// is open by default so nothing is hidden, and print CSS (globals.css) forces every one
+// open regardless of what the viewer collapsed, so a PDF export always has the full audit.
+function SeoChecksByCategory({checks}:{checks:SeoCheck[]}){
+ const cats=["technical","meta","content","performance","mobile","accessibility","links","schema"];
+ return <div style={{display:"grid",gap:"8px"}}>
+  {cats.map(cat=>{const cc=checks.filter(c=>c.category===cat);if(!cc.length)return null;return <details key={cat} open style={{border:"1px solid var(--line)",borderRadius:"8px",overflow:"hidden"}}>
+   <summary style={{padding:"10px 14px",fontSize:"12px",fontWeight:700,color:"var(--ink)",cursor:"pointer"}}>{SEO_CATEGORY_LABEL[cat]} ({cc.length})</summary>
+   <div>{cc.map(c=><SeoCheckRow key={c.id} c={c}/>)}</div>
+  </details>})}
+ </div>;
+}
 function ReportSeoAuditSection({seoAudit}:{seoAudit:ReportDetail["seoAudit"]}){
  const audit=seoAudit?.audit;
- if(!audit)return <div className="rv-section"><div className="rv-section-title">SEO audit</div><p style={{fontSize:"12px",color:"var(--muted)"}}>No SEO audit has been run for this brand yet — run one from AI Fixes → SEO Audit.</p></div>;
+ if(!audit)return <div className="rv-section"><div className="rv-section-title">SEO audit</div><p style={{fontSize:"12px",color:"var(--muted)"}}>No SEO audit has been run for this brand yet — run one from the SEO Audit page.</p></div>;
  const scoreColor=audit.overallScore>=70?"var(--em)":audit.overallScore>=50?"var(--am)":"var(--cr)";
  const passed=audit.checks.filter(c=>c.status==="pass").length;
  const warnings=audit.checks.filter(c=>c.status==="warning").length;
  const failed=audit.checks.filter(c=>c.status==="fail").length;
- const cats=["technical","meta","content","performance","mobile","accessibility","links","schema"];
  return <div className="rv-section" style={{pageBreakInside:"avoid"}}>
   <div className="rv-section-title">SEO audit <span style={{fontWeight:400,fontSize:"11px",color:"var(--muted)",textTransform:"none",letterSpacing:0}}>— {formatTimestamp(audit.createdAt,"datetime")}</span></div>
   <div style={{display:"flex",alignItems:"center",gap:"16px",marginBottom:"14px",flexWrap:"wrap"}}>
    <span style={{fontSize:"36px",fontWeight:800,fontFamily:"Outfit,system-ui",color:scoreColor,letterSpacing:"-1.5px"}}>{audit.overallScore}</span>
    <span style={{fontSize:"12px",color:"var(--muted)"}}>SEO score · {passed} passed, {warnings} warning{warnings!==1?"s":""}, {failed} failed</span>
   </div>
-  <div style={{display:"grid",gap:"8px"}}>
-   {cats.map(cat=>{const cc=audit.checks.filter(c=>c.category===cat);if(!cc.length)return null;return <details key={cat} open style={{border:"1px solid var(--line)",borderRadius:"8px",overflow:"hidden"}}>
-    <summary style={{padding:"10px 14px",fontSize:"12px",fontWeight:700,color:"var(--ink)",cursor:"pointer"}}>{SEO_CATEGORY_LABEL[cat]} ({cc.length})</summary>
-    <div>{cc.map(c=><SeoCheckRow key={c.id} c={c}/>)}</div>
-   </details>})}
-  </div>
+  <SeoChecksByCategory checks={audit.checks}/>
  </div>;
+}
+
+// Dedicated SEO audit report, browsable under Reports -> SEO Audit reports: score trend
+// across every stored audit, cards to open any past audit's full detail, and a print/PDF
+// export (window.print(), same pattern as FixesProgressReport) of the latest audit.
+function SeoAuditReport({demo,brand}:{demo:boolean;brand?:Brand}){
+ const [exportMode,setExportMode]=useState<"summary"|"detailed">("detailed");
+ function exportPdf(mode:"summary"|"detailed"){setExportMode(mode);setTimeout(()=>window.print(),0)}
+ const [history,setHistory]=useState<SeoAuditHistoryEntry[]>([]);
+ const [latest,setLatest]=useState<SeoAuditData|null>(null);
+ const [loading,setLoading]=useState(!demo);
+ const [viewAuditId,setViewAuditId]=useState<string|null>(null);
+ const [viewDetail,setViewDetail]=useState<SeoAuditData|null>(null);
+ const [viewLoading,setViewLoading]=useState(false);
+
+ useEffect(()=>{
+  if(demo||!brand){setLoading(false);return}
+  let cancelled=false;
+  (async()=>{
+   setLoading(true);
+   const [hr,lr]=await Promise.all([
+    fetch(`/api/seo-audit/history?brandId=${encodeURIComponent(brand.id)}`),
+    fetch(`/api/seo-audit/latest?brandId=${encodeURIComponent(brand.id)}`),
+   ]);
+   const [hj,lj]=await Promise.all([hr.json().catch(()=>({})),lr.json().catch(()=>({}))]);
+   if(!cancelled){setHistory(hj.audits||[]);setLatest(lj.audit||null);setLoading(false)}
+  })();
+  return ()=>{cancelled=true};
+ },[demo,brand]);
+
+ async function openAudit(id:string){
+  setViewAuditId(id);setViewLoading(true);
+  const r=await fetch(`/api/seo-audit/${id}`);const j=await r.json().catch(()=>({}));
+  setViewDetail(j.audit||null);setViewLoading(false);
+ }
+ function closeAudit(){setViewAuditId(null);setViewDetail(null)}
+
+ const items=demo?DEMO_SEO_HISTORY:history;
+ const data=demo?DEMO_SEO_AUDIT:latest;
+ const trendData=items.slice().reverse().map(h=>({label:formatTimestamp(h.createdAt,"date"),value:h.overallScore}));
+ const exportedAt=new Date().toISOString();
+ const brandLabel=demo?"Acme Software":brand?.name||"";
+ const domainLabel=demo?"acme.co":brand?.domain||"";
+ const passed=data?.checks.filter(c=>c.status==="pass").length||0;
+ const warnings=data?.checks.filter(c=>c.status==="warning").length||0;
+ const failed=data?.checks.filter(c=>c.status==="fail").length||0;
+
+ if(!demo&&!brand)return <p style={{color:"var(--muted)",fontSize:"13px"}}>Add a client first to see SEO audit reports.</p>;
+ if(!demo&&loading)return <p>Loading…</p>;
+ if(!demo&&!items.length)return <EmptyState icon={Globe} headline="No SEO audits yet for this brand" subtext="Run an SEO audit from the SEO Audit page — score history and exportable reports will show up here." />;
+
+ return <>
+  <div className="no-print" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"12px",marginBottom:"14px",flexWrap:"wrap"}}>
+   <p style={{margin:0,fontSize:"12px",color:"var(--muted)"}}>{items.length} audit{items.length!==1?"s":""} recorded{brand?` for ${brand.name}`:""}</p>
+   <div className="export-split" style={{display:"flex",gap:"6px"}}>
+    <button className="button outline" style={{fontSize:"12px",padding:"9px 14px"}} onClick={()=>exportPdf("summary")}><FileText style={{width:"13px"}}/>Export Summary</button>
+    <button className="button" style={{fontSize:"12px",padding:"9px 14px"}} onClick={()=>exportPdf("detailed")}><FileText style={{width:"13px"}}/>Export Detailed</button>
+   </div>
+  </div>
+  <div className="no-print">
+   {trendData.length>=2&&<article className="panel" style={{padding:"20px 24px",marginBottom:"14px"}}>
+    <div style={{fontSize:"11px",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:"var(--muted)",marginBottom:"12px"}}>SEO score trend</div>
+    <ScoreTrendChart data={trendData} yMax={100} color="var(--sky)"/>
+   </article>}
+   <div className="report-grid">
+    {items.map((h,i)=>{const scoreColor=h.overallScore>=70?"var(--em)":h.overallScore>=50?"var(--am)":"var(--cr)";return <article className="panel report-card" key={h.id} onClick={()=>!demo&&openAudit(h.id)}>
+     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"14px"}}>
+      <div><span style={{fontSize:"10px",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",color:"var(--muted)"}}>AUDIT #{items.length-i}</span><p style={{margin:"3px 0 0",fontSize:"12px",color:"var(--muted)"}}>{formatTimestamp(h.createdAt,"datetime")}</p></div>
+     </div>
+     <div style={{display:"flex",alignItems:"flex-end",gap:"14px",marginBottom:"14px"}}>
+      <span style={{fontSize:"56px",fontWeight:800,lineHeight:1,fontFamily:"Outfit,system-ui",color:scoreColor,letterSpacing:"-2px"}}>{h.overallScore}</span>
+      <div style={{paddingBottom:"5px"}}><div style={{fontSize:"11px",color:"var(--muted)",marginBottom:"2px"}}>SEO Score</div><div style={{fontSize:"12px",fontWeight:600,color:"var(--ink)"}}>{h.checksCount} checks</div></div>
+     </div>
+     {!demo&&<button className="button" style={{fontSize:"12px",padding:"7px 14px",marginTop:"auto"}} onClick={e=>{e.stopPropagation();openAudit(h.id)}}>View audit <ArrowUpRight style={{width:"13px"}}/></button>}
+    </article>})}
+   </div>
+  </div>
+  {viewAuditId&&typeof document!=="undefined"&&createPortal(<div className="modal-back" onClick={closeAudit}><div className="modal" style={{maxWidth:"720px",width:"100%",textAlign:"left"}} onClick={e=>e.stopPropagation()}>
+   <button className="modal-x" onClick={closeAudit}><X/></button>
+   {viewLoading||!viewDetail?<div style={{textAlign:"center",padding:"40px"}}><LoaderCircle className="spin"/></div>:<>
+    <h2 style={{marginBottom:"4px"}}>SEO audit — {formatTimestamp(viewDetail.createdAt,"datetime")}</h2>
+    <p style={{color:"var(--muted)",fontSize:"12px",marginBottom:"16px"}}>{viewDetail.domain}</p>
+    <SeoChecksByCategory checks={viewDetail.checks}/>
+   </>}
+  </div></div>,document.body)}
+  {/* Export always reflects the latest audit -- same shape as SeoAuditTab/ReportSeoAuditSection
+      so there's one source of truth for what an "SEO report" contains. */}
+  <div className="sar-print-doc" data-export-mode={exportMode}>
+   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",borderBottom:"2px solid var(--ink)",paddingBottom:"16px",marginBottom:"16px"}}>
+    <div>
+     <div style={{font:"700 14px 'Outfit',system-ui"}}>a<span style={{color:"var(--sky)"}}>askvisibleai</span></div>
+     <div style={{font:"700 20px 'Outfit',system-ui",margin:"10px 0 2px"}}>SEO audit report</div>
+     <div style={{fontSize:"11.5px",color:"var(--muted)"}}>{brandLabel}{domainLabel&&` · ${domainLabel}`}</div>
+    </div>
+    <div style={{textAlign:"right",fontSize:"11px",color:"var(--muted)"}}>Exported {formatTimestamp(exportedAt,"datetime")}<br/>{exportMode==="summary"?"Summary":"Detailed"} — latest audit</div>
+   </div>
+   {data&&<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",borderBottom:"1px solid var(--line)",marginBottom:"16px"}}>
+    <div style={{padding:"12px 16px",textAlign:"center"}}><b style={{display:"block",font:"800 24px 'Outfit',system-ui",color:"var(--ink)"}}>{data.overallScore}</b><span style={{fontSize:"10px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:".4px"}}>SEO score</span></div>
+    <div style={{padding:"12px 16px",textAlign:"center",borderLeft:"1px solid var(--line)"}}><b style={{display:"block",font:"800 24px 'Outfit',system-ui",color:"var(--em)"}}>{passed}</b><span style={{fontSize:"10px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:".4px"}}>Passed</span></div>
+    <div style={{padding:"12px 16px",textAlign:"center",borderLeft:"1px solid var(--line)"}}><b style={{display:"block",font:"800 24px 'Outfit',system-ui",color:"var(--am)"}}>{warnings}</b><span style={{fontSize:"10px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:".4px"}}>Warnings</span></div>
+    <div style={{padding:"12px 16px",textAlign:"center",borderLeft:"1px solid var(--line)"}}><b style={{display:"block",font:"800 24px 'Outfit',system-ui",color:"var(--cr)"}}>{failed}</b><span style={{fontSize:"10px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:".4px"}}>Failed</span></div>
+   </div>}
+   <div className="summary-only" style={{fontSize:"12px",color:"var(--muted)"}}>{data?`${passed} passed, ${warnings} warning${warnings!==1?"s":""}, ${failed} failed out of ${data.checks.length} checks.`:"No audit data."}</div>
+   <div className="detail-only">{data&&<SeoChecksByCategory checks={data.checks}/>}</div>
+  </div>
+ </>;
 }
 function ReportTrafficSection({traffic}:{traffic:ReportDetail["traffic"]}){
  if(!traffic?.connected||!traffic.overview)return <div className="rv-section"><div className="rv-section-title">Google Search Console traffic</div><p style={{fontSize:"12px",color:"var(--muted)"}}>Connect Google Search Console (Overview → Traffic &amp; Reach) to include traffic data in reports.</p></div>;
