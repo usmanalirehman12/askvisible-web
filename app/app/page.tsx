@@ -380,7 +380,7 @@ function groupByEngine(answers:ScanAnswerRow[]){
 const ENG_KEY_MAP:Record<string,string>={ChatGPT:"openai",Gemini:"gemini",Perplexity:"perplexity",Claude:"anthropic",DeepSeek:"deepseek","AI Overviews":"ai_overviews"};
 function fmtNum(n:number){if(n>=1_000_000)return(n/1_000_000).toFixed(1)+"M";if(n>=1_000)return(n/1_000).toFixed(0)+"K";return n.toString()}
 
-type GscData={connected:boolean;propertyUrl?:string;overview?:{impressions:number;clicks:number;ctr:number;position:number};queries?:{query:string;impressions:number;clicks:number;ctr:number;position:number}[];trend?:{date:string;impressions:number;clicks:number}[];range?:{start:string;end:string};fetchedAt?:string};
+type GscData={connected:boolean;propertyUrl?:string;error?:string;overview?:{impressions:number;clicks:number;ctr:number;position:number};queries?:{query:string;impressions:number;clicks:number;ctr:number;position:number}[];trend?:{date:string;impressions:number;clicks:number}[];range?:{start:string;end:string};fetchedAt?:string};
 type GscRange="7d"|"30d"|"90d"|"custom";
 const GSC_RANGES:{id:GscRange;label:string}[]=[{id:"7d",label:"7 days"},{id:"30d",label:"30 days"},{id:"90d",label:"90 days"},{id:"custom",label:"Custom"}];
 
@@ -395,6 +395,7 @@ function GscTrafficTab({demo,brandId}:{demo:boolean;brandId?:string}){
  const [cache,setCache]=useState<Map<string,GscData>>(new Map());
  const [disconnecting,setDisconnecting]=useState(false);
  const [retryKey,setRetryKey]=useState(0);
+ const [gscError,setGscError]=useState<string|null>(null);
 
  const cacheKey=range==="custom"?`custom:${customStart}:${customEnd}`:range;
  const data=cache.get(cacheKey)||null;
@@ -407,11 +408,15 @@ function GscTrafficTab({demo,brandId}:{demo:boolean;brandId?:string}){
   if(customIncomplete)return;
   if(cache.has(cacheKey)){setStatus("connected");return}
   setStatus("loading");
+  setGscError(null);
   const params=new URLSearchParams({brandId,range});
   if(range==="custom"){params.set("start",customStart);params.set("end",customEnd)}
   fetch(`/api/gsc/metrics?${params.toString()}`)
    .then(r=>r.json())
-   .then((d:GscData)=>{if(d.connected){setCache(prev=>new Map(prev).set(cacheKey,d));setStatus("connected")}else setStatus("disconnected")})
+   .then((d:GscData)=>{
+    if(d.connected&&d.error){setGscError(d.error);setStatus("error");return}
+    if(d.connected){setCache(prev=>new Map(prev).set(cacheKey,d));setStatus("connected")}else setStatus("disconnected")
+   })
    .catch(()=>setStatus("error"));
  // cache intentionally excluded: it's read (cache.has) to skip a redundant fetch, but
  // only ever written as a RESULT of this effect running, so including it would re-run
@@ -437,7 +442,7 @@ function GscTrafficTab({demo,brandId}:{demo:boolean;brandId?:string}){
 
  if(customIncomplete)return <>{rangePicker}<p style={{fontSize:"12px",color:"var(--muted)",padding:"8px 2px"}}>Pick a start and end date to see custom-range traffic.</p></>;
  if(status==="loading")return <>{rangePicker}<div style={{padding:"48px",textAlign:"center",color:"var(--muted)"}}><LoaderCircle size={24} className="spin" style={{display:"inline-block"}}/><p style={{marginTop:"12px",fontSize:"13px"}}>Loading Search Console data…</p></div></>;
- if(status==="error")return <>{rangePicker}<article className="panel" style={{padding:"40px",textAlign:"center"}}><AlertCircle size={28} color="var(--cr)"/><p style={{marginTop:"12px",fontSize:"14px",color:"var(--ink)"}}>Failed to load Search Console data</p><button className="button outline" style={{marginTop:"16px"}} onClick={()=>setRetryKey(k=>k+1)}>Retry</button></article></>;
+ if(status==="error")return <>{rangePicker}<article className="panel" style={{padding:"40px",textAlign:"center"}}><AlertCircle size={28} color="var(--cr)"/><p style={{marginTop:"12px",fontSize:"14px",color:"var(--ink)"}}>Failed to load Search Console data</p>{gscError&&<p style={{marginTop:"6px",fontSize:"12px",color:"var(--muted)",maxWidth:"480px",margin:"6px auto 0"}}>{gscError}</p>}<button className="button outline" style={{marginTop:"16px"}} onClick={()=>setRetryKey(k=>k+1)}>Retry</button></article></>;
  if(status==="disconnected"||status==="idle")return(
   <article className="panel" style={{padding:"56px 32px",textAlign:"center"}}>
    <div style={{width:"60px",height:"60px",borderRadius:"16px",background:"color-mix(in srgb,var(--sky) 12%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px"}}><TrendingUp size={30} color="var(--sky)"/></div>

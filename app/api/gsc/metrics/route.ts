@@ -24,5 +24,6 @@ export async function GET(request: Request) {
   if (!brand) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
 
   const traffic = await fetchGscTraffic(supabase, brand.workspace_id, brand.domain, range, startParam, endParam);
+  if (traffic.connected && traffic.error) return NextResponse.json(traffic, { status: 502 });
   return NextResponse.json(traffic);
 }

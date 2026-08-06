@@ -2,9 +2,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 type TokenRow = { access_token: string; refresh_token: string | null; expires_at: string | null; property_url: string | null };
 
-async function getAccessToken(token: TokenRow): Promise<string> {
-  if (token.expires_at && new Date(token.expires_at) > new Date(Date.now() + 60_000)) return token.access_token;
-  if (!token.refresh_token) return token.access_token;
+async function getAccessToken(token: TokenRow): Promise<{ accessToken: string; refreshError: string | null }> {
+  if (token.expires_at && new Date(token.expires_at) > new Date(Date.now() + 60_000)) return { accessToken: token.access_token, refreshError: null };
+  if (!token.refresh_token) return { accessToken: token.access_token, refreshError: null };
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -15,17 +15,18 @@ async function getAccessToken(token: TokenRow): Promise<string> {
       grant_type: "refresh_token",
     }),
   });
-  if (!res.ok) return token.access_token;
+  if (!res.ok) return { accessToken: token.access_token, refreshError: `Token refresh failed (${res.status}): ${await res.text()}` };
   const { access_token } = await res.json();
-  return access_token || token.access_token;
+  if (!access_token) return { accessToken: token.access_token, refreshError: "Token refresh returned no access_token" };
+  return { accessToken: access_token, refreshError: null };
 }
 
-async function gscQuery(siteUrl: string, accessToken: string, body: object) {
+async function gscQuery(siteUrl: string, accessToken: string, body: object): Promise<{ data: any; error: null } | { data: null; error: string }> {
   const encoded = encodeURIComponent(siteUrl);
   const res = await fetch(`https://searchconsole.googleapis.com/webmasters/v3/sites/${encoded}/searchAnalytics/query`,
     { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  if (!res.ok) return null;
-  return res.json();
+  if (!res.ok) return { data: null, error: `Search Console API error (${res.status}): ${await res.text()}` };
+  return { data: await res.json(), error: null };
 }
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -47,9 +48,11 @@ function resolveGscRange(range: string, start: string | null, end: string | null
 
 export type GscTraffic =
   | { connected: false }
+  | { connected: true; propertyUrl: string; error: string }
   | {
       connected: true;
       propertyUrl: string;
+      error?: undefined;
       overview: { impressions: number; clicks: number; ctr: number; position: number };
       queries: { query: string; impressions: number; clicks: number; ctr: number; position: number }[];
       trend: { date: string; impressions: number; clicks: number }[];
@@ -68,18 +71,23 @@ export async function fetchGscTraffic(supabase: SupabaseClient, workspaceId: str
     .maybeSingle();
   if (!tokenRow) return { connected: false };
 
-  const accessToken = await getAccessToken(tokenRow as TokenRow);
   const propertyUrl = tokenRow.property_url || `https://${domain}/`;
+  const { accessToken, refreshError } = await getAccessToken(tokenRow as TokenRow);
+  if (refreshError) return { connected: true, propertyUrl, error: refreshError };
+
   const { startDate, endDate, rowLimit } = resolveGscRange(range, start, end);
   const base = { startDate, endDate };
 
-  const [overviewData, queriesData, trendData] = await Promise.all([
+  const [overviewRes, queriesRes, trendRes] = await Promise.all([
     gscQuery(propertyUrl, accessToken, { ...base, dimensions: [], rowLimit: 1 }),
     gscQuery(propertyUrl, accessToken, { ...base, dimensions: ["query"], rowLimit: 25, orderBy: [{ fieldName: "impressions", sortOrder: "DESCENDING" }] }),
     gscQuery(propertyUrl, accessToken, { ...base, dimensions: ["date"], rowLimit }),
   ]);
 
-  const row0 = overviewData?.rows?.[0];
+  const firstError = overviewRes.error || queriesRes.error || trendRes.error;
+  if (firstError) return { connected: true, propertyUrl, error: firstError };
+
+  const row0 = overviewRes.data?.rows?.[0];
   return {
     connected: true,
     propertyUrl,
@@ -89,11 +97,11 @@ export async function fetchGscTraffic(supabase: SupabaseClient, workspaceId: str
       ctr: Math.round((row0?.ctr ?? 0) * 1000) / 10,
       position: Math.round((row0?.position ?? 0) * 10) / 10,
     },
-    queries: (queriesData?.rows ?? []).map((r: any) => ({
+    queries: (queriesRes.data?.rows ?? []).map((r: any) => ({
       query: r.keys[0] as string, impressions: Math.round(r.impressions), clicks: Math.round(r.clicks),
       ctr: Math.round(r.ctr * 1000) / 10, position: Math.round(r.position * 10) / 10,
     })),
-    trend: (trendData?.rows ?? []).map((r: any) => ({ date: r.keys[0] as string, impressions: Math.round(r.impressions), clicks: Math.round(r.clicks) })),
+    trend: (trendRes.data?.rows ?? []).map((r: any) => ({ date: r.keys[0] as string, impressions: Math.round(r.impressions), clicks: Math.round(r.clicks) })),
     range: { start: startDate, end: endDate },
     fetchedAt: new Date().toISOString(),
   };
