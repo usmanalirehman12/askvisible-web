@@ -685,11 +685,45 @@ function Answers({demo,brand,refreshKey,scan,scanning,newUser}:{demo:boolean;bra
  </>;
 }
 
+const FIX_CATEGORY_ORDER=["content","authority","schema","reviews","gbp"] as const;
+const FIX_CATEGORY_LABEL:Record<string,string>={content:"Content",authority:"Authority",schema:"Schema",reviews:"Reviews",gbp:"Business profile"};
+const fixCategoryClass=(category:string)=>({schema:"blue",content:"purple",authority:"green",reviews:"orange",gbp:"orange"} as Record<string,string>)[category]||"purple";
+const FIX_CATEGORY_DOT:Record<string,string>={content:"var(--sky)",authority:"var(--em)",schema:"#1D4ED8",reviews:"var(--am)",gbp:"var(--am)"};
+const fixStatusColor:Record<string,string>={pending:"var(--muted,#64748B)",implementing:"var(--sky,#0EA5E9)",done:"var(--em,#10B981)"};
+const fixStatusLabel:Record<string,string>={pending:"Pending",implementing:"Implementing",done:"Done ✓"};
+
+// Shared by real and demo fix lists so both get the same categorized layout. Only shows a
+// pill for categories actually present in the data — an empty "Reviews (0)" pill would be
+// clutter, not guidance, mirroring how SeoAuditTab hides empty category panels.
+function FixCategoryTabs({items,active,onChange}:{items:{category:string}[];active:string;onChange:(c:string)=>void}){
+ const present=FIX_CATEGORY_ORDER.filter(c=>items.some(i=>i.category===c));
+ return <div className="fix-cat-tabs">
+  <button className={active==="all"?"fix-cat-tab active":"fix-cat-tab"} onClick={()=>onChange("all")}><span className="dot" style={{background:"var(--muted)"}}/>All fixes<span className="cnt">{items.length}</span></button>
+  {present.map(c=><button key={c} className={active===c?"fix-cat-tab active":"fix-cat-tab"} onClick={()=>onChange(c)}><span className="dot" style={{background:FIX_CATEGORY_DOT[c]}}/>{FIX_CATEGORY_LABEL[c]}<span className="cnt">{items.filter(i=>i.category===c).length}</span></button>)}
+ </div>;
+}
+
+function FixStatusControl({status,busy,onSet}:{status:string;busy:boolean;onSet:(s:string)=>void}){
+ return <div className="fix-status-row"><div className="fix-status-label">Status — track across scans</div><div className="fix-status">{(["pending","implementing","done"] as const).map(s=>{const on=status===s;return <button key={s} className={on?"on":""} style={on?{background:fixStatusColor[s]}:undefined} disabled={busy||on} onClick={()=>onSet(s)}>{busy&&!on?"…":fixStatusLabel[s]}</button>})}</div></div>;
+}
+
+const DEMO_FIXES=[
+ {id:"d1",category:"content",title:"Create an alternatives comparison page",desc:"You're absent from 8 high-intent prompts where direct competitors have detailed comparison pages.",lift:"12–18%",effort:"~25 min",status:"pending"},
+ {id:"d2",category:"content",title:"Publish a buyer's guide for your category",desc:"AI engines cite structured guides more often than product pages alone.",lift:"6–10%",effort:"~40 min",status:"implementing"},
+ {id:"d3",category:"authority",title:"Earn mentions from 3 cited sources",desc:"These publications appear in 41% of winning answers but don't currently mention Acme.",lift:"8–14%",effort:"~2 hrs",status:"pending"},
+ {id:"d4",category:"authority",title:"Get listed on G2 and Capterra",desc:"AI engines pull comparison data from review aggregators when answering.",lift:"5–9%",effort:"~30 min",status:"done"},
+ {id:"d5",category:"schema",title:"Add SoftwareApplication schema",desc:"Clarify your product category, pricing, features, and reviews for answer engines.",lift:"4–7%",effort:"~10 min",status:"pending"},
+ {id:"d6",category:"reviews",title:"Respond to your 2 most recent reviews",desc:"Engines weigh recency and responsiveness when framing sentiment.",lift:"3–6%",effort:"~15 min",status:"pending"},
+ {id:"d7",category:"gbp",title:"Complete your Google Business Profile",desc:"Missing hours and category fields reduce confidence in local answers.",lift:"4–8%",effort:"~10 min",status:"implementing"}
+];
+
 function Fixes({demo,brand,refreshKey,newUser}:{demo:boolean;brand?:Brand;refreshKey:number;newUser:boolean}){
  const [fixesTab,setFixesTab]=useState<"fixes"|"seo">("fixes");
  const [fixes,setFixes]=useState<Fix[]>([]);
  const [loading,setLoading]=useState(!demo);
  const [updatingId,setUpdatingId]=useState<string|null>(null);
+ const [catTab,setCatTab]=useState("all");
+ const [demoStatus,setDemoStatus]=useState<Record<string,string>>(()=>Object.fromEntries(DEMO_FIXES.map(f=>[f.id,f.status])));
 
  async function loadFixes(){
   if(!brand)return;
@@ -716,19 +750,23 @@ function Fixes({demo,brand,refreshKey,newUser}:{demo:boolean;brand?:Brand;refres
 
  if(fixesTab==="seo") return <>{pageHeader}{tabBar}<SeoAuditTab demo={demo} brand={brand}/></>;
 
- if(demo)return <>{pageHeader}{tabBar}<div className="fix-grid">{[{type:"CONTENT",title:"Create an alternatives comparison page",desc:"You're absent from 8 high-intent prompts where direct competitors have detailed comparison pages.",lift:"12–18%",effort:"~25 min",color:"purple"},{type:"AUTHORITY",title:"Earn mentions from 3 cited sources",desc:"These publications appear in 41% of winning answers but don't currently mention Acme.",lift:"8–14%",effort:"~2 hrs",color:"green"},{type:"TECHNICAL",title:"Add SoftwareApplication schema",desc:"Clarify your product category, pricing, features, and reviews for answer engines.",lift:"4–7%",effort:"~10 min",color:"blue"}].map((f,i)=><article className="fix-card" key={f.title}><div><span className={`fix-type ${f.color}`}>{f.type}</span><em>#{i+1}</em></div><span className="big-fix-icon"><WandSparkles/></span><h3>{f.title}</h3><p>{f.desc}</p><div className="lift"><span>Estimated lift<b>{f.lift}</b></span><span>Time to implement<b>{f.effort}</b></span></div><button className="button">Generate fix <Sparkles/></button></article>)}</div></>;
+ if(demo){
+  const shown=catTab==="all"?DEMO_FIXES:DEMO_FIXES.filter(f=>f.category===catTab);
+  return <>{pageHeader}{tabBar}
+   <FixCategoryTabs items={DEMO_FIXES} active={catTab} onChange={setCatTab}/>
+   <div className="fix-grid">{shown.map(f=><article className="fix-card" key={f.id}><div><span className={`fix-type ${fixCategoryClass(f.category)}`}>{FIX_CATEGORY_LABEL[f.category]}</span></div><span className="big-fix-icon"><WandSparkles/></span><h3>{f.title}</h3><p>{f.desc}</p><div className="lift"><span>Estimated lift<b>{f.lift}</b></span><span>Time to implement<b>{f.effort}</b></span></div><FixStatusControl status={demoStatus[f.id]} busy={false} onSet={s=>setDemoStatus(prev=>({...prev,[f.id]:s}))}/></article>)}</div>
+  </>;
+ }
 
  if(!brand)return <>{pageHeader}{tabBar}<p style={{color:"var(--muted)",fontSize:"13px"}}>Add a client first to generate AI fixes.</p></>;
  if(loading)return <>{pageHeader}{tabBar}</>;
  if(!fixes.length)return <>{pageHeader}{tabBar}<div className="panel" style={{padding:"32px",textAlign:"center"}}><WandSparkles style={{width:"32px",color:"var(--faint)",marginBottom:"12px"}}/><p style={{margin:"0 0 6px",fontWeight:600}}>No fixes yet for {brand.name}</p><p style={{margin:0,fontSize:"13px",color:"var(--muted)"}}>Click <b>Run scan</b> — Claude generates fix suggestions automatically from the results.</p></div></>;
 
- const colorFor=(category:string)=>({schema:"blue",content:"purple",authority:"green",reviews:"orange",gbp:"orange"} as Record<string,string>)[category]||"purple";
- const statusColor:Record<string,string>={pending:"var(--muted,#64748B)",implementing:"var(--sky,#0EA5E9)",done:"var(--em,#10B981)"};
- const statusLabel:Record<string,string>={pending:"Pending",implementing:"Implementing",done:"Done ✓"};
+ const shown=catTab==="all"?fixes:fixes.filter(f=>f.category===catTab);
 
  return <>{pageHeader}{tabBar}
-  <div className="fix-grid">{fixes.map((f,i)=>{const busy=updatingId===f.id;const st=f.status||"pending";return <article className="fix-card" key={f.id}><div><span className={`fix-type ${colorFor(f.category)}`}>{f.category.toUpperCase()}</span><em>#{i+1}</em></div><span className="big-fix-icon"><WandSparkles/></span><h3>{f.title}</h3><p>{f.rationale}</p>{f.generated_content&&<FixContent content={f.generated_content}/>}<div className="lift"><span>Estimated lift<b>+{f.impact_low}–{f.impact_high}%</b></span><span>Status<b style={{color:statusColor[st]||"var(--muted)"}}>{statusLabel[st]||st}</b></span></div><div style={{display:"flex",gap:"6px",marginTop:"10px"}}>{(["pending","implementing","done"] as const).map(s=><button key={s} onClick={()=>setStatus(f.id,s)} disabled={busy||st===s} style={{flex:1,padding:"5px 0",fontSize:"11px",borderRadius:"6px",border:`1px solid ${st===s?statusColor[s]:"var(--line)"}`,background:st===s?statusColor[s]:"transparent",color:st===s?"#fff":"var(--muted)",cursor:st===s?"default":"pointer",fontWeight:st===s?700:400,transition:"all 0.15s"}}>{busy&&st!==s?"…":statusLabel[s]}</button>)}</div></article>})}
-  </div>
+  <FixCategoryTabs items={fixes} active={catTab} onChange={setCatTab}/>
+  <div className="fix-grid">{shown.map(f=>{const busy=updatingId===f.id;const st=f.status||"pending";return <article className="fix-card" key={f.id}><div><span className={`fix-type ${fixCategoryClass(f.category)}`}>{FIX_CATEGORY_LABEL[f.category]||f.category}</span></div><span className="big-fix-icon"><WandSparkles/></span><h3>{f.title}</h3><p>{f.rationale}</p>{f.generated_content&&<FixContent content={f.generated_content}/>}<div className="lift"><span>Estimated lift<b>+{f.impact_low}–{f.impact_high}%</b></span><span>Added<b>{formatTimestamp(f.created_at,"date")}</b></span></div><FixStatusControl status={st} busy={busy} onSet={s=>setStatus(f.id,s)}/></article>})}</div>
  </>;
 }
 

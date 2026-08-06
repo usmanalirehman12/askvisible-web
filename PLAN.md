@@ -4,7 +4,7 @@ Working plan for the product. Detailed history, architectural decisions and debu
 notes live in [`.claude/session_notes.md`](.claude/session_notes.md); this file is the
 short version: what's done, what's next, and why.
 
-Last updated: 2026-08-06 (First-run UX extended to every tab — per-tab tips gated by real account age, not just device localStorage — code shipped, not yet pushed)
+Last updated: 2026-08-06 (AI Fixes redesign — category tabs with counts, restyled status tracker per fix — code shipped, not yet pushed)
 
 ---
 
@@ -44,7 +44,7 @@ custom domain, and a free pre-signup checker tool — those need you too, not co
 | 4 | Scan engine | Async multi-provider pipeline (OpenAI, Gemini, Perplexity, Claude, DeepSeek) |
 | 5 | Scoring & confidence | Mention 60 / position 25 / sentiment 15, averaged over all answers |
 | 6 | Dashboard sections | Overview, prompts, answers, competitors, settings |
-| 7 | AI Fixes (FixEngine) | Claude-generated fixes with status tracking |
+| 7 | AI Fixes (FixEngine) | Claude-generated fixes with status tracking. **Redesigned 2026-08-06:** category pill-tabs (Content/Authority/Schema/Reviews/Business profile) with live counts, filterable grid, restyled pending/implementing/done status control per fix. Detail in `.claude/session_notes.md` #14. |
 | 8 | Reports tab | Per-run report view |
 | 9 | Scan schedule | `scan_frequency` / `scan_day`, daily Vercel cron at 06:00 UTC |
 | 10 | SEO Audit | 12+ regex checks over fetched HTML, grouped by category |

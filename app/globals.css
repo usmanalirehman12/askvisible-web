@@ -377,6 +377,24 @@ td .up,td .down{display:flex;align-items:center}td svg{width:12px}
 .lift b{display:block;color:var(--ink);font-size:13px;margin-top:4px;font-weight:600}
 .fix-card .button{width:100%;font-size:12px}
 
+/* Fix category tabs */
+.fix-cat-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.fix-cat-tab{display:flex;align-items:center;gap:7px;padding:8px 14px;border-radius:99px;border:1px solid var(--line);background:var(--surface);font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer;transition:background .15s,color .15s,border-color .15s}
+.fix-cat-tab .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.fix-cat-tab .cnt{font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:99px;background:var(--soft);color:var(--muted)}
+.fix-cat-tab:hover,.fix-cat-tab.active{background:var(--sky);border-color:var(--sky);color:#fff}
+.fix-cat-tab:hover .cnt,.fix-cat-tab.active .cnt{background:rgba(255,255,255,.25);color:#fff}
+.fix-cat-tab:hover .dot,.fix-cat-tab.active .dot{background:#fff!important}
+
+/* Fix status tracker */
+.fix-status-row{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.fix-status-label{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--faint);margin-bottom:7px}
+.fix-status{display:flex;gap:5px}
+.fix-status button{flex:1;padding:6px 0;font-size:11px;font-weight:600;border-radius:7px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
+.fix-status button.on{color:#fff;border-color:transparent}
+.fix-status button:not(.on):hover{background:var(--soft)}
+.fix-status button:disabled{cursor:default}
+
 /* Competitors */
 .competitor-grid,.report-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
 .competitor-card{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;position:relative}

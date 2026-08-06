@@ -1,6 +1,6 @@
 # AskVisibleAI — Session Notes
 
-**Last updated:** 2026-08-06 (First-run UX extended to every tab — per-tab dismissible tips gated by real account age — code shipped, not yet pushed)  
+**Last updated:** 2026-08-06 (AI Fixes redesign — category tabs with live counts, restyled status tracker — code shipped, not yet pushed)  
 **Repo:** usmanalirehman12/askvisible-web  
 **Deploy:** https://askvisible-web-mfu2.vercel.app  
 **Local:** `C:\Users\zayns\OneDrive\Documents\websitefixer`  
@@ -325,6 +325,55 @@ afterward.
 **Not verified — needs you, against production:** the actual 14-day new-account window against
 a real signup (this environment has no login), and that each tab's tip persists its own
 dismissal correctly across a real session.
+
+### 14. AI Fixes redesign: category tabs + restyled status tracker (2026-08-06)
+
+You asked for the AI Fixes tab's flat `.fix-grid` (content/authority/schema/reviews/gbp all
+mixed together, no way to see counts per category at a glance) reorganized into category
+tabs with live counts, click-to-filter, and a status control at the bottom of each card for
+tracking progress — plus a specific interaction: tabs should turn solid blue with white text
+on hover. You explicitly asked to see the UI before any code changed, so a working HTML/JS
+mockup was built and shown first (interactive tab-filtering + status-toggling, using the
+app's real fonts/colors) before touching `app/app/page.tsx`.
+
+**No new data model needed** — `Fix.category` already existed (`lib/data/types.ts`) and
+`colorFor` (now module-level `fixCategoryClass`, `app/app/page.tsx`) already mapped
+`schema|content|authority|reviews|gbp` to badge colors. Status tracking (`pending`/
+`implementing`/`done`, `PATCH /api/fixes/status`) was already fully wired end-to-end — this
+pass restyles and repositions it, it doesn't rebuild the logic.
+
+**New CSS (`app/globals.css`):** `.fix-cat-tabs`/`.fix-cat-tab` — pill tabs with a category
+color dot and a count badge, resting state a thin-bordered neutral pill, **hover and active
+both flip to solid `var(--sky)` background with white text/dot/count** per your spec. New
+`.fix-status-row`/`.fix-status` restyles the existing 3-button status control into a
+labeled, rounded segmented control ("Status — track across scans") at the bottom of each
+card, same `pending`/`implementing`/`done` semantics and colors as before.
+
+**`app/app/page.tsx`:** new module-level `FIX_CATEGORY_ORDER`/`FIX_CATEGORY_LABEL`/
+`FIX_CATEGORY_DOT` constants, and two small shared components — `FixCategoryTabs` (only
+renders a pill for categories actually present in the fix list, mirroring how `SeoAuditTab`
+hides empty category panels) and `FixStatusControl` (the restyled 3-button row, reused by
+both real and demo fixes so they share one implementation). `Fixes()` gained a `catTab` state
+filtering the grid client-side from the already-loaded `fixes` array — no new fetch, no API
+change. Demo mode's fix list grew from 3 flat items to 7 spread across all 5 categories
+(`DEMO_FIXES`) with its own local `demoStatus` state so status buttons are clickable in demo
+too, matching the mockup. The real-fix card's second `.lift` column changed from a redundant
+"Status" (now shown by `FixStatusControl` below it) to "Added" (`created_at`, via the
+existing `formatTimestamp`).
+
+**Verified:** `npx tsc --noEmit` clean, `npm test` (174 passing, no logic changed so no new
+tests needed), `npm run deadcode` clean, `npm run build` succeeds. Walked through in demo
+mode (same `.env.local` rename/restore technique, diff-verified identical afterward):
+confirmed all 7 category counts render correctly ("All fixes 7", "Content 2", "Authority 2",
+"Schema 1", "Reviews 1", "Business profile 1"), clicking "Schema" filters the grid to exactly
+that one card, and clicking "Done ✓" on a card correctly fills it in and disables it. Hover
+state's actual pixel rendering could not be screenshotted in this environment (the browser
+pane doesn't composite frames here), but the CSS rule (`.fix-cat-tab:hover{background:
+var(--sky);color:#fff}`) is a direct, unambiguous implementation of what you asked for and
+shares its selector with `.active`, which was confirmed working.
+
+**Not verified — needs you:** the actual hover-state pixel appearance in a real browser tab,
+and the real (non-demo) fix list against a genuine scan's Claude-generated fixes.
 
 ---
 
