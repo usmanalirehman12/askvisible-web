@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commonSentimentPhrases, competitiveGaps, shareOfVoice, summarizeScan, type LatestScan, type ScanAnswerRow } from "./stats";
+import { brandSentimentBreakdown, commonSentimentPhrases, competitiveGaps, shareOfVoice, summarizeScan, type LatestScan, type ScanAnswerRow } from "./stats";
 
 const row = (over: Partial<ScanAnswerRow> = {}): ScanAnswerRow => ({
   id: "a1",
@@ -175,6 +175,22 @@ describe("competitiveGaps", () => {
       competitor_mentions: [comp("Rival", true), comp("Other", true)]
     })]));
     expect(result[0].competitors).toEqual(["Rival", "Other"]);
+  });
+});
+
+describe("brandSentimentBreakdown", () => {
+  it("counts sentiment only for mentioned answers", () => {
+    const result = brandSentimentBreakdown([
+      row({ sentiment: "positive" }),
+      row({ sentiment: "positive" }),
+      row({ sentiment: "negative" }),
+      row({ brand_mentioned: false, sentiment: "not-mentioned" })
+    ]);
+    expect(result).toEqual({ positive: 2, neutral: 0, negative: 1 });
+  });
+
+  it("returns all zeros for no answers", () => {
+    expect(brandSentimentBreakdown([])).toEqual({ positive: 0, neutral: 0, negative: 0 });
   });
 });
 

@@ -110,6 +110,22 @@ export function shareOfVoice(scan: LatestScan, brandName: string): ShareOfVoiceR
     .sort((a, b) => b.mentions - a.mentions || Number(b.isBrand) - Number(a.isBrand) || a.name.localeCompare(b.name));
 }
 
+export type SentimentCounts = { positive: number; neutral: number; negative: number };
+
+// Brand Sentiment Analysis as its own Overview panel: aggregates the sentiment field
+// already scored and stored per answer (analyzeMention(), 15% of the visibility score
+// per lib/ai/scoring.ts) rather than a new scoring pass -- this is purely a new read of
+// existing data. Only counts answers where the brand was actually mentioned; an
+// unmentioned answer has no sentiment to report.
+export function brandSentimentBreakdown(answers: { brand_mentioned: boolean; sentiment: string }[]): SentimentCounts {
+  const counts: SentimentCounts = { positive: 0, neutral: 0, negative: 0 };
+  for (const a of answers) {
+    if (!a.brand_mentioned) continue;
+    if (a.sentiment === "positive" || a.sentiment === "neutral" || a.sentiment === "negative") counts[a.sentiment]++;
+  }
+  return counts;
+}
+
 export type CompetitiveGapRow = { promptQuery: string; engine: string; competitors: string[] };
 
 // The actionable half of "missed prompts": not just "we weren't named here" but "here's

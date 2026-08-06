@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { Activity, AlertCircle, ArrowDownRight, ArrowLeft, ArrowUpRight, BarChart3, Bell, Building2, Check, ChevronDown, CircleHelp, Edit2, FileText, Gauge, Globe, LayoutDashboard, Link2, LoaderCircle, LogOut, Mail, Menu, MessageSquare, Moon, MoreHorizontal, Play, Plus, Radar, Search, Settings, Sparkles, Sun, Target, Trash2, TrendingUp, Users, WandSparkles, X } from "lucide-react";
 import { supabaseConfigured } from "@/lib/supabase/config";
 import type { Brand, Competitor, Fix, Prompt, WorkspaceContext } from "@/lib/data/types";
-import type { CompetitiveGapRow, ScanAnswerRow, SentimentPhraseRow, ShareOfVoiceRow } from "@/lib/data/stats";
-import { commonSentimentPhrases, summarizeScan } from "@/lib/data/stats";
+import type { CompetitiveGapRow, ScanAnswerRow, SentimentCounts, SentimentPhraseRow, ShareOfVoiceRow } from "@/lib/data/stats";
+import { brandSentimentBreakdown, commonSentimentPhrases, summarizeScan } from "@/lib/data/stats";
 import { formatTimestamp, isWithinDays } from "@/lib/format/datetime";
 import { compareToPrevious } from "@/lib/data/reportComparison";
 import Tabs, { TabPanel } from "@/app/components/Tabs";
@@ -322,6 +322,7 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
    <div className="dashboard-grid" style={{gridTemplateColumns:"1fr"}}>
    <article className="panel engine-panel"><PanelHead title="Visibility by engine" sub="Last 30 days"/>{demoEngines.map(e=><div className="engine-row" key={e.name}><span className={`engine-logo ${e.color}`}>{e.short}</span><div><b>{e.name}</b><i><span style={{width:e.score+"%"}}/></i></div><strong>{e.score}%</strong></div>)}<button className="panel-link" onClick={()=>setSection("prompts")}>View prompt details <ArrowUpRight/></button></article>
    <article className="panel prompt-panel"><PanelHead title="Recent prompt performance" sub="Latest results across all engines" action={<button className="view-all" onClick={()=>setSection("prompts")}>View all <ArrowUpRight/></button>}/><DemoPromptTable short/></article>
+   <BrandSentimentPanel counts={DEMO_BRAND_SENTIMENT}/>
    <article className="panel opportunities"><PanelHead title="Top opportunities" sub="AI-recommended actions ranked by impact" action={<button className="view-all" onClick={()=>setSection("fixes")}>View all</button>}/>{[{t:"Add direct comparison content",p:"Your competitors win 14 prompts with comparison pages.",impact:"High",lift:"+12–18%"},{t:"Strengthen third-party citations",p:"AI engines cite 3 sources that don't mention your brand.",impact:"High",lift:"+8–14%"},{t:"Add SoftwareApplication schema",p:"Help engines understand your product entity and pricing.",impact:"Med",lift:"+4–7%"}].map(o=><div className="opportunity" key={o.t}><span className="opp-icon"><Sparkles/></span><div><b>{o.t}</b><p>{o.p}</p><small><em className={o.impact==="High"?"high":"medium"}>{o.impact} impact</em>Estimated lift <strong>{o.lift}</strong></small></div><button onClick={()=>setSection("fixes")}>Fix this <ArrowUpRight/></button></div>)}</article>
    </div>
   </>}
@@ -361,6 +362,7 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
    <div className="dashboard-grid" style={{gridTemplateColumns:"1fr"}}>
     <article className="panel engine-panel"><PanelHead title="Visibility by engine" sub="Most recent scan"/>{byEngine.map(e=><div className="engine-row" key={e.key}><span className={`engine-logo ${e.color}`}>{e.short}</span><div><b>{e.name}</b><i><span style={{width:e.pct+"%"}}/></i></div><strong>{e.pct}%</strong></div>)}<button className="panel-link" onClick={()=>setSection("prompts")}>View prompt details <ArrowUpRight/></button></article>
     <article className="panel prompt-panel"><PanelHead title="Recent prompt performance" sub="Latest results across all engines" action={<button className="view-all" onClick={()=>setSection("prompts")}>View all <ArrowUpRight/></button>}/><RealPromptTable answers={latest.answers.slice(0,4)}/></article>
+    <BrandSentimentPanel counts={brandSentimentBreakdown(latest.answers)}/>
    </div>
    {fixes.length>0&&<article className="panel opportunities" style={{marginTop:"14px"}}><PanelHead title="Top AI-generated fixes" sub="Claude&apos;s recommendations from your most recent scan" action={<button className="view-all" onClick={()=>setSection("fixes")}>View all <ArrowUpRight/></button>}/>{fixes.slice(0,3).map(f=><div className="opportunity" key={f.id}><span className="opp-icon"><Sparkles/></span><div><b>{f.title}</b><p>{f.rationale}</p><small><em className={(f.impact_high||0)>=12?"high":"medium"}>{(f.impact_high||0)>=12?"High":"Med"} impact</em>Estimated lift <strong>+{f.impact_low}–{f.impact_high}%</strong></small></div><button onClick={()=>setSection("fixes")}>View fix <ArrowUpRight/></button></div>)}</article>}
   </>}
@@ -582,6 +584,27 @@ function ScoreHero({score,trend,confidence,delta,sparkData,dateControl}:{score:n
  </div>;
 }
 function PanelHead({title,sub,action}:{title:string;sub?:string;action?:React.ReactNode}){return <div className="panel-head"><div><h3>{title}</h3>{sub&&<p>{sub}</p>}</div>{action||<button><MoreHorizontal/></button>}</div>}
+const DEMO_BRAND_SENTIMENT:SentimentCounts={positive:9,neutral:4,negative:1};
+// Brand Sentiment Analysis as its own Overview panel -- reuses the "Visibility by engine"
+// row layout (badge + bar + percent) so it reads as part of the same panel family instead
+// of a bespoke one-off.
+function BrandSentimentPanel({counts}:{counts:SentimentCounts}){
+ const total=counts.positive+counts.neutral+counts.negative;
+ if(!total)return null;
+ const rows=[
+  {label:"Positive",value:counts.positive,color:"var(--em)"},
+  {label:"Neutral",value:counts.neutral,color:"var(--muted)"},
+  {label:"Negative",value:counts.negative,color:"var(--cr)"},
+ ];
+ return <article className="panel engine-panel">
+  <PanelHead title="Brand sentiment" sub={`How AI engines frame ${total} mention${total!==1?"s":""} in your latest scan`}/>
+  {rows.map(r=><div className="engine-row" key={r.label}>
+   <span style={{width:"28px",height:"28px",borderRadius:"7px",display:"grid",placeItems:"center",background:r.color,color:"#fff",fontSize:"11px",fontWeight:800}}>{r.value}</span>
+   <div><b>{r.label}</b><i><span style={{width:`${Math.round(r.value/total*100)}%`,background:r.color}}/></i></div>
+   <strong>{Math.round(r.value/total*100)}%</strong>
+  </div>)}
+ </article>;
+}
 function DemoPromptTable({short=false}:{short?:boolean}){let rows=short?demoPrompts.slice(0,4):demoPrompts;return <div className="table-wrap"><table><thead><tr><th>Prompt</th><th>Engine</th><th>Status</th><th>Position</th><th>Sentiment</th><th>Change</th></tr></thead><tbody>{rows.map(p=><tr key={p.q}><td><b>{p.q}</b></td><td>{p.engine}</td><td><span className={p.status==="Mentioned"?"status yes":"status no"}>{p.status}</span></td><td>{p.position?`#${p.position}`:"—"}</td><td>{p.sentiment}</td><td><span className={p.change>0?"up":p.change<0?"down":""}>{p.change>0?<ArrowUpRight/>:p.change<0?<ArrowDownRight/>:"—"}{p.change!==0&&Math.abs(p.change)}</span></td></tr>)}</tbody></table></div>}
 // Real mode has no "Change" column — that needs comparing against a previous scan, which
 // isn't tracked yet (this is the first real scan for most brands). Showing a fabricated
