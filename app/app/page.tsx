@@ -246,14 +246,29 @@ function useScanHistory(demo:boolean,brand:Brand|undefined,refreshKey:number){
 // Bar chart living inside ScoreHero, in its own zone to the right of a vertical
 // separator -- the score card has the width for it, so bars stretch to fill that
 // zone (flex-based, not fixed-size SVG) rather than sitting as a squeezed sparkline.
+// Scaled to the data's own min/max range (not a fixed 0-100), so low or tightly-
+// clustered scores (e.g. a brand sitting at 15-20) still show visible bar height
+// instead of flattening out near zero against the full scale.
 function MiniBarChart({data}:{data:{score:number;date:string}[]}){
  if(data.length<2)return null;
- const max=Math.max(100,...data.map(d=>d.score));
- return <div style={{display:"flex",alignItems:"flex-end",gap:"7px",height:"84px",width:"100%"}}>
-  {data.map((d,i)=>{const isLast=i===data.length-1;return <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%",minWidth:0}}>
-   {isLast&&<span style={{fontSize:"11px",fontWeight:700,color:"var(--ink,#0F172A)",marginBottom:"4px"}}>{d.score}</span>}
-   <div style={{width:"100%",height:`${Math.max(4,(d.score/max)*100)}%`,borderRadius:"4px 4px 0 0",background:isLast?"var(--sky,#0EA5E9)":"color-mix(in srgb,var(--sky,#0EA5E9) 40%,transparent)"}}/>
-  </div>})}
+ const scores=data.map(d=>d.score);
+ const lo=Math.max(0,Math.min(...scores)-6);
+ const hi=Math.min(100,Math.max(...scores)+6);
+ const range=hi-lo||1;
+ return <div style={{display:"flex",alignItems:"flex-end",gap:"7px",width:"100%"}}>
+  {data.map((d,i)=>{
+   const isLast=i===data.length-1;
+   const pct=((d.score-lo)/range)*100;
+   const dateLabel=d.date?new Date(d.date).toLocaleDateString(undefined,{month:"short",day:"numeric"}):"";
+   const barPct=Math.max(6,pct);
+   return <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",minWidth:0}}>
+    <div style={{width:"100%",height:"140px",position:"relative"}}>
+     <span style={{position:"absolute",left:"50%",bottom:`calc(${barPct}% + 3px)`,transform:"translateX(-50%)",fontSize:"10px",fontWeight:700,color:isLast?"var(--ink,#0F172A)":"var(--muted,#64748B)",whiteSpace:"nowrap"}}>{d.score}</span>
+     <div style={{position:"absolute",bottom:0,left:0,width:"100%",height:`${barPct}%`,borderRadius:"3px 3px 0 0",background:isLast?"var(--sky,#0EA5E9)":"color-mix(in srgb,var(--sky,#0EA5E9) 40%,transparent)"}}/>
+    </div>
+    <span style={{fontSize:"8.5px",color:"var(--faint,#94A3B8)",marginTop:"3px",whiteSpace:"nowrap"}}>{dateLabel}</span>
+   </div>;
+  })}
  </div>;
 }
 
@@ -264,7 +279,7 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
  const [overviewTab,setOverviewTab]=useState<"summary"|"traffic"|"rankings">("summary");
  const [promptCount,setPromptCount]=useState<number|null>(null);
  const [promptCountLoading,setPromptCountLoading]=useState(!demo);
- const [trendRange,setTrendRange]=useState<"7d"|"15d"|"30d">("30d");
+ const [trendRange,setTrendRange]=useState<"3d"|"7d"|"10d">("10d");
  useEffect(()=>{
   if(demo||!brand){setPromptCountLoading(false);return}
   let cancelled=false;
@@ -279,11 +294,22 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
  const checklistReady=!promptCountLoading&&!historyLoading;
 
  const header=<div className="page-title"><div><span className="overline">OVERVIEW</span><h1>Good morning, {firstName} <span>👋</span></h1><p>Here&apos;s how your brand is showing up in AI answers.</p></div></div>;
- const dateControl=<div className="date-control"><select value={trendRange} onChange={e=>setTrendRange(e.target.value as "7d"|"15d"|"30d")} style={{border:0,background:"transparent",color:"inherit",font:"inherit",cursor:"pointer",appearance:"none",paddingRight:"2px"}} aria-label="Trend chart range"><option value="7d">Last 7 days</option><option value="15d">Last 15 days</option><option value="30d">Last 30 days</option></select><ChevronDown/></div>;
+ // The visible label+arrow are display-only; the actual <select> is an invisible
+ // full-cover overlay so the whole pill (including the arrow) is clickable, not just
+ // the text -- a bare inline <select> only claims click area for its own text width.
+ const trendRangeLabel={"3d":"Last 3 days","7d":"Last 7 days","10d":"Last 10 days"}[trendRange];
+ const dateControl=<div className="date-control" style={{position:"relative"}}>
+  <span>{trendRangeLabel}</span><ChevronDown/>
+  <select value={trendRange} onChange={e=>setTrendRange(e.target.value as "3d"|"7d"|"10d")} aria-label="Trend chart range" style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0,cursor:"pointer",border:0}}>
+   <option value="3d">Last 3 days</option>
+   <option value="7d">Last 7 days</option>
+   <option value="10d">Last 10 days</option>
+  </select>
+ </div>;
  const tabBar=<div className="overview-tabs"><button className={overviewTab==="summary"?"active":""} onClick={()=>setOverviewTab("summary")}>Summary</button><button className={overviewTab==="rankings"?"active":""} onClick={()=>setOverviewTab("rankings")}>Rankings</button><button className={overviewTab==="traffic"?"active":""} onClick={()=>setOverviewTab("traffic")}>Traffic &amp; Reach</button></div>;
 
  if(demo){
-  const demoRangeDays={"7d":7,"15d":15,"30d":30}[trendRange];
+  const demoRangeDays={"3d":3,"7d":7,"10d":10}[trendRange];
   const demoSpark=demoSparkData.filter(d=>isWithinDays(d.date,demoRangeDays));
   return <>{header}
   {tabBar}
@@ -315,7 +341,7 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
  const byEngine=groupByEngine(latest.answers);
  const cmp=compareToPrevious(history,latest.runId);
  const delta=cmp.absoluteDelta;
- const trendRangeDays={"7d":7,"15d":15,"30d":30}[trendRange];
+ const trendRangeDays={"3d":3,"7d":7,"10d":10}[trendRange];
  const sparkData=history.filter(h=>isWithinDays(h.completedAt,trendRangeDays)).map(h=>({score:h.score,date:h.completedAt||""}));
 
  return <>{header}
@@ -544,7 +570,7 @@ function ScoreHero({score,trend,confidence,delta,sparkData,dateControl}:{score:n
   {sparkData&&<div style={{marginLeft:"auto",display:"flex",alignItems:"stretch",gap:"24px"}}>
    <div style={{width:"1px",alignSelf:"stretch",background:"var(--line)",opacity:.6}}/>
    {sparkData.length>=2
-    ?<div style={{display:"flex",flexDirection:"column",gap:"8px",width:"260px"}}>{dateControl&&<div style={{alignSelf:"flex-end"}}>{dateControl}</div>}<MiniBarChart data={sparkData}/><div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>{showDelta&&<span style={{fontSize:"15px",fontWeight:700,fontFamily:"Outfit,system-ui",color:deltaColor,letterSpacing:"-0.3px"}}>{deltaSign}{delta} pts vs last scan</span>}<span style={{fontSize:"11px",color:"var(--muted,#64748B)",marginLeft:"auto"}}>{sparkData.length} scan{sparkData.length!==1?"s":""} tracked</span></div></div>
+    ?<div style={{display:"flex",flexDirection:"column",gap:"6px",width:"260px"}}>{dateControl&&<div style={{alignSelf:"flex-end"}}>{dateControl}</div>}<MiniBarChart data={sparkData}/><div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>{showDelta&&<span style={{fontSize:"15px",fontWeight:700,fontFamily:"Outfit,system-ui",color:deltaColor,letterSpacing:"-0.3px"}}>{deltaSign}{delta} pts vs last scan</span>}<span style={{fontSize:"11px",color:"var(--muted,#64748B)",marginLeft:"auto"}}>{sparkData.length} scan{sparkData.length!==1?"s":""} tracked</span></div></div>
     :<div style={{textAlign:"right",maxWidth:"160px"}}>{dateControl}<span style={{fontSize:"11px",color:"var(--muted,#64748B)",lineHeight:1.5,display:"block",marginTop:"8px"}}>{sparkData.length===0?"No scans in this range":"Only 1 scan in this range"} — try a wider window to see a trend</span></div>}
   </div>}
   {trend&&!sparkData&&<div style={{marginLeft:"auto",textAlign:"right"}}><span style={{display:"block",fontSize:"28px",fontWeight:700,fontFamily:"Outfit,system-ui",color:"var(--em,#10B981)",letterSpacing:"-1px"}}>↑{trend}</span><span style={{fontSize:"12px",color:"var(--muted,#64748B)"}}>vs last period</span></div>}
