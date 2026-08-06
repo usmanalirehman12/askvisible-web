@@ -52,6 +52,31 @@ export function analyzeCompetitors(text: string, competitors: CompetitorInput[])
   });
 }
 
+// Post-hoc phrase mining for "Common sentiment phrases": given the same raw answer text
+// already persisted on every answer row (answers.raw_answer), pull out the sentence
+// containing the brand mention so the app can show *what AI engines are actually saying*,
+// not just a positive/neutral/negative bucket. Deliberately separate from analyzeMention --
+// that runs at scan time and its return shape is persisted; this runs on-demand against
+// already-stored text and adds no new columns or scan-time cost.
+export function extractMentionSnippet(text: string, brand: string, domain: string, extraAliases: string[] = [], maxLen = 160): string | null {
+  const matcher = aliasMatcher([brand, domain, domain.split(".")[0], ...extraAliases]);
+  if (!matcher) return null;
+  const match = text.match(matcher);
+  if (!match || match.index == null) return null;
+  const index = match.index;
+  // Search for the closing period starting after the full matched alias, not at its start --
+  // a domain alias (e.g. "acme.com") contains its own period, which would otherwise be
+  // mistaken for the sentence boundary and truncate the snippet mid-domain.
+  const matchEnd = index + match[0].length;
+  // Expand outward to sentence boundaries around the match; fall back to a hard cutoff at
+  // maxLen if the sentence runs long, so one run-on paragraph can't produce an unreadable row.
+  const start = Math.max(0, text.lastIndexOf(".", index) + 1, text.lastIndexOf("\n", index) + 1);
+  const nextPeriod = text.indexOf(".", matchEnd);
+  const end = nextPeriod === -1 || nextPeriod - start > maxLen ? Math.min(text.length, start + maxLen) : nextPeriod + 1;
+  const snippet = text.slice(start, end).trim().replace(/\s+/g, " ");
+  return snippet || null;
+}
+
 export function extractUrls(text: string): string[] {
   return [...new Set((text.match(/https?:\/\/\S+/g) || []).map(u => u.replace(/[),.\]}>"']+$/, "")))].slice(0, 12);
 }

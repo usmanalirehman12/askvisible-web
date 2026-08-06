@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { Activity, AlertCircle, ArrowDownRight, ArrowLeft, ArrowUpRight, BarChart3, Bell, Building2, Check, ChevronDown, CircleHelp, Edit2, FileText, Gauge, Globe, LayoutDashboard, Link2, LoaderCircle, LogOut, Mail, Menu, MessageSquare, Moon, MoreHorizontal, Play, Plus, Radar, Search, Settings, Sparkles, Sun, Target, Trash2, TrendingUp, Users, WandSparkles, X } from "lucide-react";
 import { supabaseConfigured } from "@/lib/supabase/config";
 import type { Brand, Competitor, Fix, Prompt, WorkspaceContext } from "@/lib/data/types";
-import type { CompetitiveGapRow, ScanAnswerRow, ShareOfVoiceRow } from "@/lib/data/stats";
-import { summarizeScan } from "@/lib/data/stats";
+import type { CompetitiveGapRow, ScanAnswerRow, SentimentPhraseRow, ShareOfVoiceRow } from "@/lib/data/stats";
+import { commonSentimentPhrases, summarizeScan } from "@/lib/data/stats";
 import { formatTimestamp, isWithinDays } from "@/lib/format/datetime";
 import { compareToPrevious } from "@/lib/data/reportComparison";
 import Tabs, { TabPanel } from "@/app/components/Tabs";
@@ -670,6 +670,26 @@ function Prompts({demo,brand,refreshKey,newUser}:{demo:boolean;brand?:Brand;refr
 
 // Wraps every case-insensitive occurrence of `needle` in <mark>. Plain substring match is
 // enough here — this is a transparency aid ("see the data behind the score"), not search.
+const DEMO_SENTIMENT_PHRASES:SentimentPhraseRow[]=[
+ {phrase:"Acme Software stand out for combining multi-engine monitoring with actionable fixes.",sentiment:"positive",count:2},
+ {phrase:"It runs prompts across several AI engines concurrently and scores how a brand is mentioned.",sentiment:"positive",count:1},
+];
+// The qualitative complement to the sentiment score elsewhere: what AI engines are actually
+// saying, not just a bucketed count. Collapsed by default since it's a supplementary read,
+// not the primary reason someone opens the Answers tab.
+function SentimentPhrasesPanel({phrases}:{phrases:SentimentPhraseRow[]}){
+ if(!phrases.length)return null;
+ return <article className="panel" style={{marginBottom:"14px"}}>
+  <PanelHead title="Common sentiment phrases" sub="Recurring language AI engines use around your brand"/>
+  <div style={{display:"grid",gap:"8px"}}>
+   {phrases.slice(0,8).map((p,i)=><div key={i} style={{display:"flex",alignItems:"flex-start",gap:"10px",padding:"9px 12px",border:"1px solid var(--line)",borderRadius:"7px"}}>
+    <span style={{width:"8px",height:"8px",borderRadius:"50%",marginTop:"5px",flexShrink:0,background:p.sentiment==="positive"?"var(--em)":"var(--cr)"}}/>
+    <span style={{flex:1,minWidth:0,fontSize:"12px",color:"var(--ink)",lineHeight:1.5,fontStyle:"italic"}}>&ldquo;{p.phrase}&rdquo;</span>
+    <span style={{fontSize:"10px",fontWeight:700,padding:"2px 8px",borderRadius:"99px",flexShrink:0,background:p.sentiment==="positive"?"var(--em-d,#DCFCE7)":"#FEE2E2",color:p.sentiment==="positive"?"var(--em)":"var(--cr)"}}>{p.count}×</span>
+   </div>)}
+  </div>
+ </article>;
+}
 function highlightMentions(text:string,needle:string):React.ReactNode{
  if(!needle.trim())return text;
  const re=new RegExp(`(${needle.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")})`,"gi");
@@ -710,7 +730,7 @@ function Answers({demo,brand,refreshKey,scan,scanning,newUser}:{demo:boolean;bra
  if(demo){
   const brandName="Acme Software";
   const rows=demoPrompts.map((p,i)=>({id:String(i),engine:p.engine,prompt:p.q,brand_mentioned:p.status==="Mentioned",position:p.position,sentiment:p.sentiment,text:demoAnswerText[p.engine]||""}));
-  return <>{header}<div className="table-wrap"><table><thead><tr><th style={{width:"24px"}}></th><th>Prompt</th><th>Engine</th><th>Status</th><th>Position</th><th>Sentiment</th></tr></thead><tbody>{rows.map(a=>{const open=expandedId===a.id;return <Fragment key={a.id}>
+  return <>{header}<SentimentPhrasesPanel phrases={DEMO_SENTIMENT_PHRASES}/><div className="table-wrap"><table><thead><tr><th style={{width:"24px"}}></th><th>Prompt</th><th>Engine</th><th>Status</th><th>Position</th><th>Sentiment</th></tr></thead><tbody>{rows.map(a=>{const open=expandedId===a.id;return <Fragment key={a.id}>
    <tr onClick={()=>setExpandedId(open?null:a.id)} style={{cursor:"pointer"}}>
     <td><ChevronDown style={{width:"14px",color:"var(--faint)",transition:"transform .15s",transform:open?"rotate(0deg)":"rotate(-90deg)"}}/></td>
     <td><b>{a.prompt}</b></td><td>{a.engine}</td>
@@ -728,8 +748,10 @@ function Answers({demo,brand,refreshKey,scan,scanning,newUser}:{demo:boolean;bra
 
  const engineKeys=[...new Set(report.answers.map(a=>a.engine))];
  const filtered=report.answers.filter(a=>(engineFilter==="all"||a.engine===engineFilter)&&(statusFilter==="all"||(statusFilter==="mentioned")===a.brand_mentioned));
+ const phrases=commonSentimentPhrases(report.answers,report.brand.name,report.brand.domain);
 
  return <>{header}
+  <SentimentPhrasesPanel phrases={phrases}/>
   <div className="filterbar" style={{marginBottom:"14px"}}>
    <select value={engineFilter} onChange={e=>setEngineFilter(e.target.value)} style={{fontSize:"12px",padding:"7px 10px",borderRadius:"7px",border:"1px solid var(--line)",background:"var(--surface)",color:"var(--ink)"}}>
     <option value="all">All engines</option>

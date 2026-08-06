@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { competitiveGaps, shareOfVoice, summarizeScan, type LatestScan, type ScanAnswerRow } from "./stats";
+import { commonSentimentPhrases, competitiveGaps, shareOfVoice, summarizeScan, type LatestScan, type ScanAnswerRow } from "./stats";
 
 const row = (over: Partial<ScanAnswerRow> = {}): ScanAnswerRow => ({
   id: "a1",
@@ -175,5 +175,38 @@ describe("competitiveGaps", () => {
       competitor_mentions: [comp("Rival", true), comp("Other", true)]
     })]));
     expect(result[0].competitors).toEqual(["Rival", "Other"]);
+  });
+});
+
+describe("commonSentimentPhrases", () => {
+  const ans = (text: string, sentiment: string, brand_mentioned = true) => ({ text, brand_mentioned, sentiment });
+
+  it("returns nothing when the brand wasn't mentioned", () => {
+    expect(commonSentimentPhrases([ans("Acme is the best.", "positive", false)], "Acme", "acme.com")).toEqual([]);
+  });
+
+  it("excludes neutral and not-mentioned sentiment", () => {
+    expect(commonSentimentPhrases([ans("Acme exists.", "neutral")], "Acme", "acme.com")).toEqual([]);
+    expect(commonSentimentPhrases([ans("Nothing here.", "not-mentioned", false)], "Acme", "acme.com")).toEqual([]);
+  });
+
+  it("counts identical phrases across multiple answers", () => {
+    const answers = [
+      ans("Acme is the best option here.", "positive"),
+      ans("Some intro. Acme is the best option here. More text.", "positive"),
+    ];
+    const result = commonSentimentPhrases(answers, "Acme", "acme.com");
+    expect(result).toEqual([{ phrase: "Acme is the best option here.", sentiment: "positive", count: 2 }]);
+  });
+
+  it("sorts by count descending", () => {
+    const answers = [
+      ans("Acme is expensive.", "negative"),
+      ans("Acme is the best option.", "positive"),
+      ans("Acme is the best option.", "positive"),
+    ];
+    const result = commonSentimentPhrases(answers, "Acme", "");
+    expect(result[0]).toMatchObject({ phrase: "Acme is the best option.", count: 2 });
+    expect(result[1]).toMatchObject({ phrase: "Acme is expensive.", count: 1 });
   });
 });

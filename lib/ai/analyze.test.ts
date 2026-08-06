@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeCompetitors, analyzeMention, extractUrls } from "./analyze";
+import { analyzeCompetitors, analyzeMention, extractMentionSnippet, extractUrls } from "./analyze";
 
 describe("analyzeMention", () => {
   it("finds the brand by name", () => {
@@ -88,6 +88,32 @@ describe("analyzeCompetitors", () => {
 
   it("does not report a mention for a short name with no domain", () => {
     expect(analyzeCompetitors("An ordinary sentence about plumbing.", [{ name: "AB" }])[0].mentioned).toBe(false);
+  });
+});
+
+describe("extractMentionSnippet", () => {
+  it("returns the sentence containing the mention", () => {
+    const text = "Some intro sentence. Acme is the best option here for most teams. A trailing sentence.";
+    expect(extractMentionSnippet(text, "Acme", "")).toBe("Acme is the best option here for most teams.");
+  });
+
+  it("returns null when the brand isn't mentioned", () => {
+    expect(extractMentionSnippet("Nothing relevant here.", "Acme", "acme.com")).toBeNull();
+  });
+
+  it("returns null when no alias is long enough to be meaningful", () => {
+    expect(extractMentionSnippet("Some completely unrelated sentence.", "", "")).toBeNull();
+  });
+
+  it("falls back to a hard cutoff for a run-on sentence with no nearby period", () => {
+    const longRun = "Acme is " + "very ".repeat(60) + "good";
+    const result = extractMentionSnippet(longRun, "Acme", "", [], 40);
+    expect(result).not.toBeNull();
+    expect(result!.length).toBeLessThanOrEqual(40);
+  });
+
+  it("matches by domain when the brand name never appears", () => {
+    expect(extractMentionSnippet("Try acme.com for this need.", "Totally Different", "acme.com")).toBe("Try acme.com for this need.");
   });
 });
 
