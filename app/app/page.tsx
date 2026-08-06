@@ -232,61 +232,67 @@ function useFixes(demo:boolean,brand:Brand|undefined,refreshKey:number){
 type ScanHistoryEntry={runId:string;completedAt:string|null;score:number;mentions:number;total:number};
 function useScanHistory(demo:boolean,brand:Brand|undefined,refreshKey:number){
  const [history,setHistory]=useState<ScanHistoryEntry[]>([]);
+ const [loading,setLoading]=useState(!demo);
  useEffect(()=>{
-  if(demo||!brand)return;
+  if(demo||!brand){setLoading(false);return}
   let cancelled=false;
-  (async()=>{const r=await fetch(`/api/scan-history?brandId=${encodeURIComponent(brand.id)}`);const j=await r.json().catch(()=>({}));if(!cancelled)setHistory(j.history||[])})();
+  setLoading(true);
+  (async()=>{const r=await fetch(`/api/scan-history?brandId=${encodeURIComponent(brand.id)}`);const j=await r.json().catch(()=>({}));if(!cancelled){setHistory(j.history||[]);setLoading(false)}})();
   return ()=>{cancelled=true};
  },[demo,brand,refreshKey]);
- return history;
+ return {history,loading};
 }
 
-function Sparkline({data}:{data:{score:number;date:string}[]}){
+// Bar chart living inside ScoreHero, in its own zone to the right of a vertical
+// separator -- the score card has the width for it, so bars stretch to fill that
+// zone (flex-based, not fixed-size SVG) rather than sitting as a squeezed sparkline.
+function MiniBarChart({data}:{data:{score:number;date:string}[]}){
  if(data.length<2)return null;
- const w=180,h=44;
- const scores=data.map(d=>d.score);
- const lo=Math.max(0,Math.min(...scores)-8),hi=Math.min(100,Math.max(...scores)+8);
- const range=hi-lo||1;
- const pts=data.map((d,i)=>`${(i/(data.length-1))*w},${h-((d.score-lo)/range)*h}`).join(" ");
- return <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{overflow:"visible",flexShrink:0}}>
-  <polyline points={pts} fill="none" stroke="var(--sky,#0EA5E9)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
-  {data.map((d,i)=>{const x=(i/(data.length-1))*w;const y=h-((d.score-lo)/range)*h;return <circle key={i} cx={x} cy={y} r={i===data.length-1?4:2.5} fill="var(--sky,#0EA5E9)"/>})}
- </svg>;
+ const max=Math.max(100,...data.map(d=>d.score));
+ return <div style={{display:"flex",alignItems:"flex-end",gap:"7px",height:"84px",width:"100%"}}>
+  {data.map((d,i)=>{const isLast=i===data.length-1;return <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%",minWidth:0}}>
+   {isLast&&<span style={{fontSize:"11px",fontWeight:700,color:"var(--ink,#0F172A)",marginBottom:"4px"}}>{d.score}</span>}
+   <div style={{width:"100%",height:`${Math.max(4,(d.score/max)*100)}%`,borderRadius:"4px 4px 0 0",background:isLast?"var(--sky,#0EA5E9)":"color-mix(in srgb,var(--sky,#0EA5E9) 40%,transparent)"}}/>
+  </div>})}
+ </div>;
 }
 
 function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{demo:boolean;brand?:Brand;refreshKey:number;scan:()=>void;scanning:boolean;setSection:(s:string)=>void;firstName:string}){
  const {scan:latest,loading}=useLatestScan(demo,brand,refreshKey);
  const fixes=useFixes(demo,brand,refreshKey);
- const history=useScanHistory(demo,brand,refreshKey);
+ const {history,loading:historyLoading}=useScanHistory(demo,brand,refreshKey);
  const [overviewTab,setOverviewTab]=useState<"summary"|"traffic"|"rankings">("summary");
  const [promptCount,setPromptCount]=useState<number|null>(null);
+ const [promptCountLoading,setPromptCountLoading]=useState(!demo);
  const [trendRange,setTrendRange]=useState<"7d"|"15d"|"30d">("30d");
  useEffect(()=>{
-  if(demo||!brand)return;
+  if(demo||!brand){setPromptCountLoading(false);return}
   let cancelled=false;
-  (async()=>{const [{createClient},{getPrompts}]=await Promise.all([import("@/lib/supabase/client"),import("@/lib/data/prompts")]);const supabase=createClient();const rows=await getPrompts(supabase,brand.id);if(!cancelled)setPromptCount(rows.length)})();
+  setPromptCountLoading(true);
+  (async()=>{const [{createClient},{getPrompts}]=await Promise.all([import("@/lib/supabase/client"),import("@/lib/data/prompts")]);const supabase=createClient();const rows=await getPrompts(supabase,brand.id);if(!cancelled){setPromptCount(rows.length);setPromptCountLoading(false)}})();
   return ()=>{cancelled=true};
  },[demo,brand,refreshKey]);
+ // Onboarding checklist reads promptCount and scan history -- both load via separate
+ // fetches from the scan data itself, so render it only once both have resolved. Otherwise
+ // it flashes "run your first scan" for accounts that already have scans, for the split
+ // second before the real counts arrive.
+ const checklistReady=!promptCountLoading&&!historyLoading;
 
  const header=<div className="page-title"><div><span className="overline">OVERVIEW</span><h1>Good morning, {firstName} <span>👋</span></h1><p>Here&apos;s how your brand is showing up in AI answers.</p></div></div>;
- const dateControl=<div className="date-control" style={{marginBottom:"14px"}}><select value={trendRange} onChange={e=>setTrendRange(e.target.value as "7d"|"15d"|"30d")} style={{border:0,background:"transparent",color:"inherit",font:"inherit",cursor:"pointer",appearance:"none",paddingRight:"2px"}} aria-label="Trend chart range"><option value="7d">Last 7 days</option><option value="15d">Last 15 days</option><option value="30d">Last 30 days</option></select><ChevronDown/></div>;
- const tabBar=<div className="overview-tabs"><button className={overviewTab==="summary"?"active":""} onClick={()=>setOverviewTab("summary")}>Summary</button><button className={overviewTab==="traffic"?"active":""} onClick={()=>setOverviewTab("traffic")}>Traffic &amp; Reach</button><button className={overviewTab==="rankings"?"active":""} onClick={()=>setOverviewTab("rankings")}>Rankings</button></div>;
+ const dateControl=<div className="date-control"><select value={trendRange} onChange={e=>setTrendRange(e.target.value as "7d"|"15d"|"30d")} style={{border:0,background:"transparent",color:"inherit",font:"inherit",cursor:"pointer",appearance:"none",paddingRight:"2px"}} aria-label="Trend chart range"><option value="7d">Last 7 days</option><option value="15d">Last 15 days</option><option value="30d">Last 30 days</option></select><ChevronDown/></div>;
+ const tabBar=<div className="overview-tabs"><button className={overviewTab==="summary"?"active":""} onClick={()=>setOverviewTab("summary")}>Summary</button><button className={overviewTab==="rankings"?"active":""} onClick={()=>setOverviewTab("rankings")}>Rankings</button><button className={overviewTab==="traffic"?"active":""} onClick={()=>setOverviewTab("traffic")}>Traffic &amp; Reach</button></div>;
 
  if(demo){
   const demoRangeDays={"7d":7,"15d":15,"30d":30}[trendRange];
   const demoSpark=demoSparkData.filter(d=>isWithinDays(d.date,demoRangeDays));
   return <>{header}
+  {tabBar}
   {overviewTab==="summary"&&<>
    <p style={{fontSize:"12px",color:"var(--muted)",margin:"0 0 8px"}}>Last scanned {formatTimestamp(new Date().toISOString(),"datetime")}</p>
    <div style={{display:"flex",gap:"14px",alignItems:"stretch",flexWrap:"wrap"}}>
-    <div style={{flex:"1 1 420px"}}><ScoreHero score={67} confidence="Full scan" delta={demoSpark.length>=2?demoSpark[demoSpark.length-1].score-demoSpark[demoSpark.length-2].score:null} sparkData={demoSpark}/></div>
+    <div style={{flex:"1 1 420px"}}><ScoreHero score={67} confidence="Full scan" delta={demoSpark.length>=2?demoSpark[demoSpark.length-1].score-demoSpark[demoSpark.length-2].score:null} sparkData={demoSpark} dateControl={dateControl}/></div>
     <div className="stats-grid" style={{flex:"1 1 320px",gridTemplateColumns:"repeat(2,1fr)"}}><Stat label="Total mentions" value="142" trend="12.4%" icon={Activity}/><Stat label="Average position" value="#2.4" sub="when mentioned" icon={Target}/><Stat label="Prompts tracked" value="183" sub="of 250 monthly" icon={Search}/><Stat label="AI engines" value="6" sub="ChatGPT · Gemini · Perplexity · Claude · DeepSeek · AI Overviews" icon={BarChart3}/></div>
    </div>
-  </>}
-  {tabBar}
-  {overviewTab==="summary"&&<>
-   {dateControl}
-   <article className="panel visibility-panel"><PanelHead title="Visibility trend" sub="Your share of AI answers over time"/><div className="chart-legend"><span><i/>Your brand</span><span><i/>Top competitor</span></div><div className="big-chart"><div className="axis"><span>80%</span><span>60%</span><span>40%</span><span>20%</span><span>0%</span></div><svg viewBox="0 0 800 260" preserveAspectRatio="none"><defs><linearGradient id="appfill"><stop offset="0" stopColor="#0EA5E9" stopOpacity=".22"/><stop offset="1" stopColor="#0EA5E9" stopOpacity="0"/></linearGradient></defs><path className="grid-lines" d="M0 10H800M0 70H800M0 130H800M0 190H800M0 250H800"/><path className="competitor-line" d="M0 158 C90 144 110 118 190 125 S300 98 380 112 S510 75 590 92 S700 65 800 68"/><path className="trend-area" d="M0 205 C80 195 110 185 170 188 S260 143 330 153 S440 115 510 125 S625 80 690 92 S760 50 800 43 L800 260L0 260Z"/><path className="trend-line" d="M0 205 C80 195 110 185 170 188 S260 143 330 153 S440 115 510 125 S625 80 690 92 S760 50 800 43"/><circle cx="800" cy="43" r="5"/></svg><div className="x-axis"><span>Jun 19</span><span>Jun 25</span><span>Jul 1</span><span>Jul 7</span><span>Jul 13</span><span>Jul 19</span></div></div></article>
    <div className="dashboard-grid" style={{gridTemplateColumns:"1fr"}}>
    <article className="panel engine-panel"><PanelHead title="Visibility by engine" sub="Last 30 days"/>{demoEngines.map(e=><div className="engine-row" key={e.name}><span className={`engine-logo ${e.color}`}>{e.short}</span><div><b>{e.name}</b><i><span style={{width:e.score+"%"}}/></i></div><strong>{e.score}%</strong></div>)}<button className="panel-link" onClick={()=>setSection("prompts")}>View prompt details <ArrowUpRight/></button></article>
    <article className="panel prompt-panel"><PanelHead title="Recent prompt performance" sub="Latest results across all engines" action={<button onClick={()=>setSection("prompts")}>View all <ArrowUpRight/></button>}/><DemoPromptTable short/></article>
@@ -301,7 +307,7 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
  if(!brand)return <>{header}{tabBar}<EmptyState icon={LayoutDashboard} headline="Your AI visibility score lands here" subtext="Add a client to start tracking how AI engines talk about your brand." primaryLabel="Add a client" onPrimary={()=>setSection("settings")}/></>;
  if(loading)return <>{header}{tabBar}<p>Loading…</p></>;
  if(!latest)return <>{header}{tabBar}
-  <OnboardingChecklist input={{hasBrand:true,promptCount:promptCount??0,scanCount:history.length}} onNavigate={setSection} onRunScan={scan} brandId={brand.id}/>
+  {checklistReady&&<OnboardingChecklist input={{hasBrand:true,promptCount:promptCount??0,scanCount:history.length}} onNavigate={setSection} onRunScan={scan} brandId={brand.id}/>}
   <EmptyState icon={LayoutDashboard} headline="Your AI visibility score lands here" subtext={`Run your first scan and we'll show how 6 AI engines talk about ${brand.name} — and where competitors win instead.`} primaryLabel={scanning?"Scanning…":"Run first scan"} onPrimary={scan}/>
  </>;
 
@@ -313,11 +319,12 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
  const sparkData=history.filter(h=>isWithinDays(h.completedAt,trendRangeDays)).map(h=>({score:h.score,date:h.completedAt||""}));
 
  return <>{header}
-  <OnboardingChecklist input={{hasBrand:true,promptCount:promptCount??0,scanCount:history.length}} onNavigate={setSection} onRunScan={scan} brandId={brand.id}/>
+  {tabBar}
+  {checklistReady&&<OnboardingChecklist input={{hasBrand:true,promptCount:promptCount??0,scanCount:history.length}} onNavigate={setSection} onRunScan={scan} brandId={brand.id}/>}
   {overviewTab==="summary"&&<>
    <p style={{fontSize:"12px",color:"var(--muted)",margin:"0 0 8px"}}>Last scanned {formatTimestamp(latest.completedAt,"datetime")}</p>
    <div style={{display:"flex",gap:"14px",alignItems:"stretch",flexWrap:"wrap"}}>
-    <div style={{flex:"1 1 420px"}}><ScoreHero score={summary.score} confidence={coverageLabel(latest.confidence??0)} delta={delta} sparkData={sparkData}/></div>
+    <div style={{flex:"1 1 420px"}}><ScoreHero score={summary.score} confidence={coverageLabel(latest.confidence??0)} delta={delta} sparkData={sparkData} dateControl={dateControl}/></div>
     <div className="stats-grid" style={{flex:"1 1 320px",gridTemplateColumns:"repeat(2,1fr)"}}>
      <Stat label="Total mentions" value={String(summary.mentions)} sub={`of ${summary.total} answers checked`} icon={Activity}/>
      <Stat label="Average position" value={summary.avgPosition!=null?`#${summary.avgPosition}`:"—"} sub="when mentioned" icon={Target}/>
@@ -325,10 +332,6 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
      <Stat label="AI engines" value="6" sub="ChatGPT · Gemini · Perplexity · Claude · DeepSeek · AI Overviews" icon={BarChart3}/>
     </div>
    </div>
-  </>}
-  {tabBar}
-  {overviewTab==="summary"&&<>
-   {dateControl}
    <div className="dashboard-grid" style={{gridTemplateColumns:"1fr"}}>
     <article className="panel engine-panel"><PanelHead title="Visibility by engine" sub="Most recent scan"/>{byEngine.map(e=><div className="engine-row" key={e.key}><span className={`engine-logo ${e.color}`}>{e.short}</span><div><b>{e.name}</b><i><span style={{width:e.pct+"%"}}/></i></div><strong>{e.pct}%</strong></div>)}<button className="panel-link" onClick={()=>setSection("prompts")}>View prompt details <ArrowUpRight/></button></article>
     <article className="panel prompt-panel"><PanelHead title="Recent prompt performance" sub="Latest results across all engines" action={<button onClick={()=>setSection("prompts")}>View all <ArrowUpRight/></button>}/><RealPromptTable answers={latest.answers.slice(0,4)}/></article>
@@ -520,7 +523,7 @@ function RankingsDetail({demo,answers}:{demo:boolean;answers:ScanAnswerRow[]}){
 }
 
 function Stat({label,value,trend,sub,confidence,icon:Icon}:{label:string;value:string;trend?:string;sub?:string;confidence?:string;icon:any}){return <article className="stat"><div><span>{label}</span><b>{value}</b>{trend?<small className="up"><ArrowUpRight/>{trend} <em>vs last period</em></small>:<small>{sub}</small>}{confidence&&<span className="confidence-tag">{confidence}</span>}</div><span className="stat-icon"><Icon/></span></article>}
-function ScoreHero({score,trend,confidence,delta,sparkData}:{score:number|string;trend?:string;confidence?:string;delta?:number|null;sparkData?:{score:number;date:string}[]}){
+function ScoreHero({score,trend,confidence,delta,sparkData,dateControl}:{score:number|string;trend?:string;confidence?:string;delta?:number|null;sparkData?:{score:number;date:string}[];dateControl?:React.ReactNode}){
  const numScore=typeof score==="number"?score:parseInt(String(score))||0;
  const rating=scoreRating(numScore);
  const showDelta=delta!=null&&delta!==0;
@@ -538,8 +541,12 @@ function ScoreHero({score,trend,confidence,delta,sparkData}:{score:number|string
     <span style={{fontSize:"10px",fontWeight:600,padding:"3px 8px",borderRadius:"99px",background:`color-mix(in srgb,${rating.color} 12%,transparent)`,color:rating.color}}>{numScore>=70?"Regularly mentioned in AI answers":numScore>=50?"Solid AI presence, room to grow":numScore>=30?"Appearing occasionally — gaps to close":numScore>=10?"Rarely mentioned — needs optimization":"Not visible in AI answers — urgent"}</span>
    </div>
   </div>
-  {sparkData&&sparkData.length>=2&&<div style={{marginLeft:"auto",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"8px"}}><Sparkline data={sparkData}/>{showDelta&&<span style={{fontSize:"20px",fontWeight:700,fontFamily:"Outfit,system-ui",color:deltaColor,letterSpacing:"-0.5px"}}>{deltaSign}{delta} pts vs last scan</span>}{sparkData.length>0&&<span style={{fontSize:"11px",color:"var(--muted,#64748B)"}}>{sparkData.length} scan{sparkData.length!==1?"s":""} tracked</span>}</div>}
-  {sparkData&&sparkData.length<2&&<div style={{marginLeft:"auto",textAlign:"right",maxWidth:"160px"}}><span style={{fontSize:"11px",color:"var(--muted,#64748B)",lineHeight:1.5}}>{sparkData.length===0?"No scans in this range":"Only 1 scan in this range"} — try a wider window to see a trend</span></div>}
+  {sparkData&&<div style={{marginLeft:"auto",display:"flex",alignItems:"stretch",gap:"24px"}}>
+   <div style={{width:"1px",alignSelf:"stretch",background:"var(--line)",opacity:.6}}/>
+   {sparkData.length>=2
+    ?<div style={{display:"flex",flexDirection:"column",gap:"8px",width:"260px"}}>{dateControl&&<div style={{alignSelf:"flex-end"}}>{dateControl}</div>}<MiniBarChart data={sparkData}/><div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>{showDelta&&<span style={{fontSize:"15px",fontWeight:700,fontFamily:"Outfit,system-ui",color:deltaColor,letterSpacing:"-0.3px"}}>{deltaSign}{delta} pts vs last scan</span>}<span style={{fontSize:"11px",color:"var(--muted,#64748B)",marginLeft:"auto"}}>{sparkData.length} scan{sparkData.length!==1?"s":""} tracked</span></div></div>
+    :<div style={{textAlign:"right",maxWidth:"160px"}}>{dateControl}<span style={{fontSize:"11px",color:"var(--muted,#64748B)",lineHeight:1.5,display:"block",marginTop:"8px"}}>{sparkData.length===0?"No scans in this range":"Only 1 scan in this range"} — try a wider window to see a trend</span></div>}
+  </div>}
   {trend&&!sparkData&&<div style={{marginLeft:"auto",textAlign:"right"}}><span style={{display:"block",fontSize:"28px",fontWeight:700,fontFamily:"Outfit,system-ui",color:"var(--em,#10B981)",letterSpacing:"-1px"}}>↑{trend}</span><span style={{fontSize:"12px",color:"var(--muted,#64748B)"}}>vs last period</span></div>}
  </div>;
 }
@@ -1025,7 +1032,7 @@ type ReportDetail={
 };
 function groupByEngineRaw(answers:{engine:string;brand_mentioned:boolean}[]){const byKey=new Map<string,{mentioned:number;total:number}>();for(const a of answers){const e=byKey.get(a.engine)||{mentioned:0,total:0};e.total++;if(a.brand_mentioned)e.mentioned++;byKey.set(a.engine,e)}return Array.from(byKey.entries()).map(([key,{mentioned,total}])=>{const meta=engineByKey[key]||{name:key,short:key[0]?.toUpperCase()||"?",color:"green"};const pct=total?Math.round(mentioned/total*100):0;return{key,name:meta.name,short:meta.short,color:meta.color,pct}})}
 function Reports({demo,brand,refreshKey,newUser,reportsTab,setReportsTab}:{demo:boolean;brand?:Brand;refreshKey:number;newUser:boolean;reportsTab:"scans"|"fixes";setReportsTab:(t:"scans"|"fixes")=>void}){
- const history=useScanHistory(demo,brand,refreshKey);
+ const {history}=useScanHistory(demo,brand,refreshKey);
  const [viewRunId,setViewRunId]=useState<string|null>(null);
  const [report,setReport]=useState<ReportDetail|null>(null);
  const [reportLoading,setReportLoading]=useState(false);
