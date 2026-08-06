@@ -4,7 +4,7 @@ Working plan for the product. Detailed history, architectural decisions and debu
 notes live in [`.claude/session_notes.md`](.claude/session_notes.md); this file is the
 short version: what's done, what's next, and why.
 
-Last updated: 2026-08-06 (AI Fixes redesign — category tabs with counts, restyled status tracker per fix — code shipped, not yet pushed)
+Last updated: 2026-08-06 (Audit trail + Fixes progress report, working Overview date range, scan confirmation dialog — code shipped, not yet pushed, needs a manual migration)
 
 ---
 
@@ -15,24 +15,25 @@ weeks; "delete stale Vercel projects" is one row and five minutes. Read the size
 in the backlog before reading anything into the percentage.
 
 ```
-Product features    █████████████████████████░  17 / 18   94%
+Product features    █████████████████████████░  18 / 19   95%
 Engineering health  ██████████████████████████   7 / 7    100%
-Known debt          ██████████████████████████   4 / 4    100%
+Known debt          █████████████████████████░   4 / 5    80%
 ────────────────────────────────────────────────────────────
-Overall             █████████████████████████░  28 / 29    97%
+Overall             █████████████████████████░  29 / 31    94%
 ```
 
 | Area | Done | Open |
 |---|---:|---:|
-| Product features | 17 | 1 |
+| Product features | 18 | 1 |
 | Engineering health | 7 | 0 |
-| Known debt | 4 | 0 |
-| **Total** | **28** | **1** |
+| Known debt | 4 | 1 |
+| **Total** | **29** | **2** |
 
-Only billing is left, and it needs your Stripe account and real pricing. Everything I can
-build without you is built. (The gap analysis also flagged a landing-page demo video, a
-custom domain, and a free pre-signup checker tool — those need you too, not code; see
-`.claude/session_notes.md` #12.)
+Only billing and the new audit-log migration are left — billing needs your Stripe account
+and real pricing; the migration needs you to run one SQL block in Supabase (see Known debt
+below). Everything else I can build without you is built. (The gap analysis also flagged a
+landing-page demo video, a custom domain, and a free pre-signup checker tool — those need
+you too, not code; see `.claude/session_notes.md` #12.)
 
 ### Shipped — product
 
@@ -55,6 +56,7 @@ custom domain, and a free pre-signup checker tool — those need you too, not co
 | 15 | Multi-workspace switching | Sidebar switcher; appears only for people in 2+ workspaces |
 | 16 | Reports, SEO Audit & Traffic upgrade | Timestamps everywhere; GSC 7/30/90-day + custom date ranges; 10-tab SEO audit (incl. Google PageSpeed Insights); reports embed the full audit + traffic + a historical score-trend chart. Detail in `.claude/session_notes.md`. Migration run 2026-08-04 — Run Audit confirmed working in production. |
 | 17 | First-run UX | Onboarding checklist (4 steps, derived from real brand/prompt/scan state), consistent empty states across Prompts/Competitors/Overview, a skippable coach-mark tour, and a new Answers tab showing every engine's raw response with the brand mention highlighted. Driven by a competitive gap analysis; detail in `.claude/session_notes.md` #12. Shipped 2026-08-06. **Extended 2026-08-06:** the tour/checklist only covered Overview — every other tab (Prompts, Answers, Competitors, AI Fixes, Reports, Settings) now gets a dismissible first-visit tip, gated by a real account-age signal (`workspaces.created_at`, new `workspaceCreatedAt` on `WorkspaceContext`) rather than a device-local flag. Detail in `.claude/session_notes.md` #13. |
+| 18 | Audit trail + AI Fixes progress report | New `audit_log` table records who started a scan, changed a fix's status, or edited a prompt/brand/schedule, and when — append-only, no update/delete RLS policy. Overview shows a "Last scanned" date and a working 7/15/30-day range picker for the trend chart (previously a hardcoded, non-functional "Last 30 days" label). Running a scan now shows a confirmation dialog reminding the user to review prompts first (token-spend guardrail), with a straight path to the Prompts tab if they want to. Reports gained a second sub-tab, "AI Fixes progress," showing each fix's generated/scan dates and full status-change history from the audit log, filterable by status — linked from a new button on the AI Fixes tab. Detail in `.claude/session_notes.md` #15. **Needs the `audit_log` table + `fixes.scan_run_id` column migration run manually — see Known debt #8.** |
 
 ### Shipped — engineering health
 
@@ -136,7 +138,41 @@ signal of what to do first. Detail, scope boundaries, and what's still explicitl
 scope (demo video, custom domain, the free pre-signup checker) in
 `.claude/session_notes.md` #12. Pushed to `origin/master` 2026-08-06.
 
-### 7. Billing & usage — size L — **needs your Stripe account and pricing**
+### ~~7. Audit trail + AI Fixes progress report~~ — CODE DONE 2026-08-06, **needs one manual migration**
+
+Scan starts, fix status changes, prompt edits, and brand/schedule changes are now logged to
+a new `audit_log` table — append-only (no update/delete RLS policy), so it actually holds up
+as a record if a "did I run this" question ever comes up. Overview shows when the brand was
+last scanned and has a working 7/15/30-day range picker for the trend chart. Running a scan
+now pauses on a confirmation dialog first, to protect against wasted token spend. Reports
+gained an "AI Fixes progress" sub-tab showing each fix's full status history. Full detail in
+`.claude/session_notes.md` #15.
+
+**Run this in the Supabase SQL Editor before any of the audit logging or the Fixes progress
+report's "from scan on [date]" line will work in production** (both fail silently rather than
+erroring if the table/column don't exist yet — logging is fire-and-forget by design, and the
+report just shows "Not linked to a scan"):
+
+```sql
+alter table public.fixes add column if not exists scan_run_id uuid references public.scan_runs(id) on delete set null;
+
+create table if not exists public.audit_log (
+  id uuid primary key default uuid_generate_v4(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  brand_id uuid references public.brands(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  action text not null,
+  detail jsonb not null default '{}',
+  created_at timestamptz not null default now()
+);
+create index if not exists audit_log_brand_created_idx on public.audit_log (brand_id, created_at desc);
+create index if not exists audit_log_workspace_created_idx on public.audit_log (workspace_id, created_at desc);
+alter table public.audit_log enable row level security;
+create policy "members read audit_log" on public.audit_log for select using (public.is_workspace_member(workspace_id));
+create policy "members insert audit_log" on public.audit_log for insert with check (public.is_workspace_member(workspace_id));
+```
+
+### 8. Billing & usage — size L — **needs your Stripe account and pricing**
 
 `workspaces.plan` and `usage_months` already exist. Blocked on things only you can supply:
 a Stripe account and keys, the actual price points and tiers, and what happens when a
@@ -152,6 +188,7 @@ schema, so guessing them would mean rework.
 | 5 | `scan_frequency` / `scan_day` missing from `schema.sql` | **Open** — item 1 above |
 | 6 | GSC migration must be run manually | Open by design; documented in `schema.sql` |
 | 7 | `seo_audits` migration must be run manually | Resolved 2026-08-04 (you) — table + RLS created, Run Audit confirmed working |
+| 8 | `audit_log` table + `fixes.scan_run_id` migration must be run manually | **Open** — same pattern as #6/#7, see below |
 | 1–4 | Fixes RLS, weak prompts, brand profile save, prompts edit UI | Resolved |
 
 Optional on top of #7: set `PAGESPEED_API_KEY` in Vercel to enable the Performance and

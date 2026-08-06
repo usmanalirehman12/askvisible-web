@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { configuredProviders } from "@/lib/ai/providers";
+import { logAuditEvent } from "@/lib/data/auditLog";
 import { randomUUID } from "crypto";
 
 export const runtime = "nodejs";
@@ -49,6 +50,14 @@ export async function POST(request: Request) {
       confidence: 0
     }).select("id").single();
     if (runErr) throw runErr;
+
+    await logAuditEvent(supabase, {
+      workspaceId: brand.workspace_id,
+      brandId: body.brandId,
+      userId: user.id,
+      action: "scan_started",
+      detail: { scanRunId: run.id, brandName: brand.name }
+    });
 
     const tasks = providers.flatMap(p => promptRows.map(pr => ({
       provider: p.name,

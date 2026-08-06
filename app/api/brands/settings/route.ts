@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { validateSchedule } from "@/lib/data/scan-schedule";
+import { logAuditEvent } from "@/lib/data/auditLog";
 
 export async function PATCH(request: Request) {
   const supabase = await createClient();
@@ -20,11 +21,23 @@ export async function PATCH(request: Request) {
   if (name !== undefined && !name.trim()) return NextResponse.json({ error: "Brand name is required" }, { status: 400 });
   if (domain !== undefined && !domain.trim()) return NextResponse.json({ error: "Website is required" }, { status: 400 });
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("brands")
     .update({ scan_frequency, scan_day, name, domain, description })
-    .eq("id", brandId);
+    .eq("id", brandId)
+    .select("workspace_id")
+    .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // One shared handler serves two distinct forms (schedule vs. brand profile), told apart
+  // by which fields the caller actually sent -- Settings never sends both at once.
+  const scheduleChanged = scan_frequency !== undefined || scan_day !== undefined;
+  const profileChanged = name !== undefined || domain !== undefined || description !== undefined;
+  if (data?.workspace_id) {
+    if (scheduleChanged) await logAuditEvent(supabase, { workspaceId: data.workspace_id, brandId, userId: user.id, action: "schedule_updated", detail: { scan_frequency, scan_day } });
+    if (profileChanged) await logAuditEvent(supabase, { workspaceId: data.workspace_id, brandId, userId: user.id, action: "brand_profile_updated", detail: { name, domain, description } });
+  }
+
   return NextResponse.json({ ok: true });
 }

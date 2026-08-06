@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logAuditEvent } from "@/lib/data/auditLog";
 
 export const runtime = "edge";
+
+function workspaceIdOf(row: { brands?: unknown } | null): string | undefined {
+  return (row?.brands as { workspace_id?: string } | null)?.workspace_id;
+}
 
 // GET  ?brandId=X        — list active prompts for a brand
 // POST {brandId, query}  — add a new prompt
@@ -36,8 +41,10 @@ export async function POST(request: Request) {
     const { brandId, query } = await request.json().catch(() => ({}));
     if (!brandId || !query?.trim()) return NextResponse.json({ error: "brandId and query required" }, { status: 400 });
 
-    const { data, error } = await supabase.from("prompts").insert({ brand_id: brandId, query: query.trim() }).select().single();
+    const { data, error } = await supabase.from("prompts").insert({ brand_id: brandId, query: query.trim() }).select("*,brands(workspace_id)").single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const workspaceId = workspaceIdOf(data);
+    if (workspaceId) await logAuditEvent(supabase, { workspaceId, brandId, userId: user.id, action: "prompt_added", detail: { promptId: data.id, query: query.trim() } });
     return NextResponse.json({ prompt: data });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Failed" }, { status: 500 });
@@ -53,8 +60,10 @@ export async function PATCH(request: Request) {
     const { promptId, query } = await request.json().catch(() => ({}));
     if (!promptId || !query?.trim()) return NextResponse.json({ error: "promptId and query required" }, { status: 400 });
 
-    const { data, error } = await supabase.from("prompts").update({ query: query.trim() }).eq("id", promptId).select().single();
+    const { data, error } = await supabase.from("prompts").update({ query: query.trim() }).eq("id", promptId).select("*,brands(workspace_id)").single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const workspaceId = workspaceIdOf(data);
+    if (workspaceId) await logAuditEvent(supabase, { workspaceId, brandId: data.brand_id, userId: user.id, action: "prompt_edited", detail: { promptId, query: query.trim() } });
     return NextResponse.json({ prompt: data });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Failed" }, { status: 500 });
@@ -70,8 +79,10 @@ export async function DELETE(request: Request) {
     const { promptId } = await request.json().catch(() => ({}));
     if (!promptId) return NextResponse.json({ error: "promptId required" }, { status: 400 });
 
-    const { error } = await supabase.from("prompts").update({ active: false }).eq("id", promptId);
+    const { data, error } = await supabase.from("prompts").update({ active: false }).eq("id", promptId).select("query,brand_id,brands(workspace_id)").single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const workspaceId = workspaceIdOf(data);
+    if (workspaceId) await logAuditEvent(supabase, { workspaceId, brandId: data.brand_id, userId: user.id, action: "prompt_deleted", detail: { promptId, query: data.query } });
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Failed" }, { status: 500 });

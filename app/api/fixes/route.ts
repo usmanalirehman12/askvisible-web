@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     }));
 
     const generated = await generateFixes(brandRow as any, mapped as any);
-    const saved = await saveFixes(supabase, brandId, generated);
+    const saved = await saveFixes(supabase, brandId, generated, scanRunId);
     return NextResponse.json({ fixesGenerated: saved.length });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Fix generation failed.", fixesGenerated: 0 }, { status: 500 });

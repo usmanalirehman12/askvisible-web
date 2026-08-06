@@ -135,6 +135,11 @@ create table public.fixes (
   id uuid primary key default uuid_generate_v4(),
   brand_id uuid not null references public.brands(id) on delete cascade,
   answer_id uuid references public.answers(id) on delete set null,
+  -- answer_id above is never actually populated by saveFixes (lib/data/fixes.ts) — there was
+  -- no reliable way to trace a fix back to the scan that generated it. scan_run_id is the
+  -- fix: scanRunId is already in scope wherever fixes get saved, so it's set directly at
+  -- insert time instead of threading per-answer ids through the fix generator's output.
+  scan_run_id uuid references public.scan_runs(id) on delete set null,
   -- Free-text by design, not an enum: existing values are schema-markup/NAP/page-rewrite
   -- fix categories; 'gbp' and 'reviews' (Google Business Profile + reviews audit findings,
   -- see lib/audit/) reuse this same table and dashboard tab rather than a parallel one.
@@ -197,6 +202,25 @@ create table public.seo_audits (
 );
 create index seo_audits_brand_created_idx on public.seo_audits (brand_id, created_at desc);
 
+-- Durable, queryable record of who did what and when — scans started, fix status changes,
+-- prompt edits, brand/schedule changes — so a "did I run this scan" dispute has a real
+-- answer instead of a guess. workspace_id is stored directly (not joined through brands)
+-- because some actions (e.g. inviting a teammate) aren't brand-scoped; brand_id is nullable
+-- for the same reason. Deliberately append-only: see the RLS policies below, which grant
+-- select and insert but no update or delete — a log that can be edited after the fact
+-- doesn't settle disputes, it just moves them.
+create table public.audit_log (
+  id uuid primary key default uuid_generate_v4(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  brand_id uuid references public.brands(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  action text not null,
+  detail jsonb not null default '{}',
+  created_at timestamptz not null default now()
+);
+create index audit_log_brand_created_idx on public.audit_log (brand_id, created_at desc);
+create index audit_log_workspace_created_idx on public.audit_log (workspace_id, created_at desc);
+
 alter table public.profiles enable row level security;
 alter table public.workspaces enable row level security;
 alter table public.workspace_members enable row level security;
@@ -211,6 +235,7 @@ alter table public.usage_months enable row level security;
 alter table public.subscriptions enable row level security;
 alter table public.gsc_tokens enable row level security;
 alter table public.seo_audits enable row level security;
+alter table public.audit_log enable row level security;
 
 create function public.is_workspace_member(target uuid) returns boolean language sql stable security definer set search_path='' as $$
   select exists(select 1 from public.workspace_members m where m.workspace_id=target and m.user_id=auth.uid());
@@ -254,6 +279,9 @@ create policy "members read fixes" on public.fixes for select using (exists(sele
 create policy "members manage fixes" on public.fixes for all using (exists(select 1 from public.brands b where b.id = fixes.brand_id and public.is_workspace_member(b.workspace_id))) with check (exists(select 1 from public.brands b where b.id = fixes.brand_id and public.is_workspace_member(b.workspace_id)));
 create policy "members read seo_audits" on public.seo_audits for select using (exists(select 1 from public.brands b where b.id = seo_audits.brand_id and public.is_workspace_member(b.workspace_id)));
 create policy "members manage seo_audits" on public.seo_audits for all using (exists(select 1 from public.brands b where b.id = seo_audits.brand_id and public.is_workspace_member(b.workspace_id))) with check (exists(select 1 from public.brands b where b.id = seo_audits.brand_id and public.is_workspace_member(b.workspace_id)));
+-- select + insert only, no update/delete policy — see the audit_log table comment above.
+create policy "members read audit_log" on public.audit_log for select using (public.is_workspace_member(workspace_id));
+create policy "members insert audit_log" on public.audit_log for insert with check (public.is_workspace_member(workspace_id));
 
 -- Workspace bootstrap: every signed-up user needs a profile row and a workspace to attach
 -- brands to before the dashboard means anything. security definer lets this run before the

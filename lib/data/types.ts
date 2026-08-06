@@ -57,6 +57,7 @@ export type Fix = {
   id: string;
   brand_id: string;
   answer_id: string | null;
+  scan_run_id: string | null;
   category: string;
   title: string;
   rationale: string | null;

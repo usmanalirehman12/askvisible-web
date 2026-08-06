@@ -1,6 +1,6 @@
 # AskVisibleAI — Session Notes
 
-**Last updated:** 2026-08-06 (AI Fixes redesign — category tabs with live counts, restyled status tracker — code shipped, not yet pushed)  
+**Last updated:** 2026-08-06 (Audit trail + AI Fixes progress report, Overview date range, scan confirmation dialog — code shipped, not yet pushed, needs a manual migration)  
 **Repo:** usmanalirehman12/askvisible-web  
 **Deploy:** https://askvisible-web-mfu2.vercel.app  
 **Local:** `C:\Users\zayns\OneDrive\Documents\websitefixer`  
@@ -374,6 +374,99 @@ shares its selector with `.active`, which was confirmed working.
 
 **Not verified — needs you:** the actual hover-state pixel appearance in a real browser tab,
 and the real (non-demo) fix list against a genuine scan's Claude-generated fixes.
+
+### 15. Audit trail, Overview date visibility, scan confirmation, AI Fixes progress report (2026-08-06)
+
+Four related asks in one pass: (1) Overview gave no sense of how stale the score was — no
+scan date shown, and the "Last 30 days" label next to the trend chart was a hardcoded string
+with zero interactivity; (2) running a scan burns real provider tokens across every prompt ×
+6 engines with no pause to reconsider; (3) "whatever a user does... has to be properly logged
+in text file in order to settle any dispute" — confirmed with you this means a real database
+audit log, not a literal file (Vercel's filesystem isn't durable between requests); (4) a new
+report showing each AI fix's generation date, source scan, and full status-change history.
+You asked to see the report's UI before any code changed — a working interactive mockup was
+built and shown first.
+
+**`audit_log` table (`supabase/schema.sql`)** — new, append-only by construction: RLS grants
+`select` and `insert` only, no `update`/`delete` policy, so a log that can be edited after
+the fact isn't possible by design (a log you can tamper with doesn't settle disputes, it
+just moves them). `workspace_id` is stored directly rather than joined through `brands`,
+since not every future action will be brand-scoped. Also fixed a real, separate gap while in
+the schema: `fixes.answer_id` existed but `saveFixes` never populated it, so there was no way
+to trace a fix back to the scan that generated it. Added `fixes.scan_run_id` instead (simpler
+than threading per-answer ids through the fix generator's output — `scanRunId` was already in
+scope everywhere `saveFixes` gets called) and wired it through
+`app/api/fixes/route.ts` → `lib/data/fixes.ts`. **Needs a manual migration — see `PLAN.md`
+item #7 for the exact SQL.**
+
+**`lib/data/auditLog.ts`** — `logAuditEvent()` (fire-and-forget insert; a logging failure
+must never block or fail the real action it's describing) and `getFixStatusHistory()`
+(returns a per-fix timeline, oldest first, ready for the progress report to render without
+re-grouping). Wired into the four routes that needed it: `app/api/scan/start/route.ts`
+(`scan_started`), `app/api/fixes/status/route.ts` (`fix_status_changed`, fetches the prior
+status before updating so the log captures "from" as well as "to" — a fix's `fixes` row only
+ever stores its *current* status, so without this the progress report couldn't show a
+history, only an end state), `app/api/prompts/route.ts` (`prompt_added`/`_edited`/`_deleted`,
+all three handlers), and `app/api/brands/settings/route.ts` (`schedule_updated` and/or
+`brand_profile_updated` — one shared PATCH handler serves two distinct forms, told apart by
+which fields the request body actually contains, since Settings never sends both at once).
+
+**Overview** (`app/app/page.tsx`): a "Last scanned {date}" line now sits above `ScoreHero`'s
+sparkline (real mode uses `latest.completedAt` via `useLatestScan`, not `history[0]` — that
+index is the *oldest* scan per the existing "first scan {date}" stat label, so the dedicated
+latest-scan hook is the correct source, not history order). The dead `.date-control`
+`<div>Last 30 days<ChevronDown/></div>` is now a real `<select>` (7/15/30 days) driving a new
+`trendRange` state, filtering `sparkData` before it reaches `Sparkline` — new
+`isWithinDays(iso, days, now)` in `lib/format/datetime.ts` (4 new tests: inside window, right
+at the edge, just outside, and unparseable/null input treated as outside rather than
+throwing) does the filtering, reused rather than writing date-math inline. Confirmed scope
+with you: trend chart only, stat cards keep showing the latest scan unchanged.
+
+**Scan confirmation** — new `confirmScanOpen` state in `AppPage`. The header's `scan-btn`
+`onClick` now opens a modal instead of calling `scan()` directly for real accounts (`demo`
+still scans immediately — a demo visitor isn't spending real tokens, and gating a fake scan
+behind a confirmation would just be friction with no purpose). Modal copied from
+`WorkspaceSwitcher`'s `.modal-back`/`.modal` + `createPortal` house style: "Review prompts"
+closes the modal and navigates to Prompts without scanning; "Run scan" closes the modal and
+calls the real `scan()`. Deliberately no "don't ask again" — the friction is meant to apply
+to every scan, not just the first, since every scan has a real token cost.
+
+**Reports sub-tabs + `FixesProgressReport`** — `reportsTab` state lifted to `AppPage` (not
+local to `Reports()`) specifically so `Fixes()`'s new "View progress report" button can set
+it to `"fixes"` *and* navigate to the Reports section in one call
+(`onViewProgressReport={()=>{setReportsTab("fixes");setSection("reports")}}`) — landing
+directly on the right sub-tab instead of the default scan-report grid. `Reports()` renamed
+its existing grid "Complete scan reports" and added "AI Fixes progress" as a sibling tab,
+same `overview-tabs` class used elsewhere. `FixesProgressReport` reuses the AI Fixes tab's
+category-badge styling (`fixCategoryClass`/`FIX_CATEGORY_LABEL`) and adds status-filter pills
+(`.fix-cat-tabs`, same CSS from #14) for All/Pending/In progress/Done with live counts. Each
+row shows the fix's generated date (`fixes.created_at`), its source scan's date (joined via
+the new `scan_run_id` → new `getScanDates()` in `lib/data/fixes.ts`, falling back to "Not
+linked to a scan" for pre-migration fixes with no `scan_run_id`), and its full status-change
+timeline from `getFixStatusHistory()` — falling back to "No status changes recorded yet." for
+fixes that predate this feature and have no audit rows. A non-"done" fix gets a footer line
+("Check back after your next scheduled scan...") rather than computing an exact next-scan
+timestamp — deliberately out of scope, since duplicating the cron scheduler's date math here
+risked drifting out of sync with the real schedule.
+
+**Verified:** `npx tsc --noEmit` clean, `npm test` (178 passing, +4 for `isWithinDays`),
+`npm run deadcode` clean (one export had to be un-exported — `AuditAction` in
+`lib/data/auditLog.ts` — after `knip` flagged it as unused outside the file), `npm run build`
+succeeds. Walked through in demo mode (same `.env.local` rename/restore technique,
+diff-verified identical afterward): "Last scanned" line and the working 7/15/30-day `<select>`
+both render on Overview; clicking "Run scan" in demo mode scans immediately with no
+confirmation dialog (correct — demo skips it entirely); "View progress report" from AI Fixes
+lands directly on the "AI Fixes progress" sub-tab with all 7 demo fixes, correct status
+counts (4 pending / 2 implementing / 1 done), full timelines, and generated/scan dates;
+clicking the "Done" status pill filters correctly to the one matching fix; "Complete scan
+reports" still renders the original three demo scan cards unchanged.
+
+**Not verified — needs you:** the actual confirmation-dialog appearance and both its button
+paths (this environment can't trigger it — it's gated to real, non-demo accounts, and there's
+no login here); every audit-log insert and the Fixes progress report's real (non-demo) data
+against production, which additionally requires you to run the migration in `PLAN.md` item #7
+first — until then, `logAuditEvent` calls fail silently (by design) and `scan_run_id` stays
+null on every new fix, so "From scan" will read "Not linked to a scan" for everything.
 
 ---
 

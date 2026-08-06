@@ -8,7 +8,7 @@ import { supabaseConfigured } from "@/lib/supabase/config";
 import type { Brand, Competitor, Fix, Prompt, WorkspaceContext } from "@/lib/data/types";
 import type { ScanAnswerRow, ShareOfVoiceRow } from "@/lib/data/stats";
 import { summarizeScan } from "@/lib/data/stats";
-import { formatTimestamp } from "@/lib/format/datetime";
+import { formatTimestamp, isWithinDays } from "@/lib/format/datetime";
 import { compareToPrevious } from "@/lib/data/reportComparison";
 import Tabs, { TabPanel } from "@/app/components/Tabs";
 import ScoreTrendChart from "@/app/components/ScoreTrendChart";
@@ -38,6 +38,8 @@ export default function AppPage(){
  const router=useRouter();
  const demo=!supabaseConfigured();
  const [section,setSection]=useState("overview"),[scanning,setScanning]=useState(false),[open,setOpen]=useState(false),[toast,setToast]=useState("");
+ const [confirmScanOpen,setConfirmScanOpen]=useState(false);
+ const [reportsTab,setReportsTab]=useState<"scans"|"fixes">("scans");
  const [scanProgress,setScanProgress]=useState<{done:number;total:number}|null>(null);
  const [ctx,setCtx]=useState<WorkspaceContext|null>(null);
  const [ctxLoading,setCtxLoading]=useState(!demo);
@@ -149,10 +151,19 @@ export default function AppPage(){
     <div className="profile"><span>{displayName.slice(0,2).toUpperCase()||"?"}</span><div><b>{displayName||"…"}</b><small>{displayEmail}</small></div>{demo?<MoreHorizontal/>:<form action="/logout" method="POST"><button className="icon-btn" title="Log out" aria-label="Log out"><LogOut/></button></form>}</div>
    </div>
   </aside>
-  <section className="app-content"><header className="app-header"><button className="menu-btn" onClick={()=>setOpen(true)}><Menu/></button><div className="header-search"><Search/><input placeholder="Search prompts, reports, fixes…"/><kbd>⌘ K</kbd></div><div className="header-actions"><button className="icon-btn"><Bell/><i/></button><button className="icon-btn theme-toggle" onClick={toggleTheme} title={theme==='light'?'Switch to dark mode':'Switch to light mode'} aria-label="Toggle theme">{theme==='light'?<Moon size={18}/>:<Sun size={18}/>}</button><button className="scan-btn" onClick={scan} disabled={scanning}>{scanning?<LoaderCircle className="spin"/>:<Play/>}{scanning?(scanProgress?`${scanProgress.done}/${scanProgress.total} prompts…`:"Starting…"):"Run scan"}</button></div></header>
-    <div className="app-page">{section==="overview"?<Overview demo={demo} brand={activeBrand} refreshKey={refreshKey} scan={scan} scanning={scanning} setSection={setSection} firstName={firstName}/>:section==="prompts"?<Prompts demo={demo} brand={activeBrand} refreshKey={refreshKey} newUser={isNewUser}/>:section==="answers"?<Answers demo={demo} brand={activeBrand} refreshKey={refreshKey} scan={scan} scanning={scanning} newUser={isNewUser}/>:section==="fixes"?<Fixes demo={demo} brand={activeBrand} refreshKey={refreshKey} newUser={isNewUser}/>:section==="competitors"?<Competitors demo={demo} brand={activeBrand} newUser={isNewUser}/>:section==="reports"?<Reports demo={demo} brand={activeBrand} refreshKey={refreshKey} newUser={isNewUser}/>:<SettingsPage demo={demo} brand={activeBrand} ctx={ctx} newUser={isNewUser} onBrandUpdated={updated=>setCtx(c=>c?{...c,brands:c.brands.map(b=>b.id===updated.id?{...b,...updated}:b)}:c)}/>}</div>
+  <section className="app-content"><header className="app-header"><button className="menu-btn" onClick={()=>setOpen(true)}><Menu/></button><div className="header-search"><Search/><input placeholder="Search prompts, reports, fixes…"/><kbd>⌘ K</kbd></div><div className="header-actions"><button className="icon-btn"><Bell/><i/></button><button className="icon-btn theme-toggle" onClick={toggleTheme} title={theme==='light'?'Switch to dark mode':'Switch to light mode'} aria-label="Toggle theme">{theme==='light'?<Moon size={18}/>:<Sun size={18}/>}</button><button className="scan-btn" onClick={()=>demo?scan():setConfirmScanOpen(true)} disabled={scanning}>{scanning?<LoaderCircle className="spin"/>:<Play/>}{scanning?(scanProgress?`${scanProgress.done}/${scanProgress.total} prompts…`:"Starting…"):"Run scan"}</button></div></header>
+    <div className="app-page">{section==="overview"?<Overview demo={demo} brand={activeBrand} refreshKey={refreshKey} scan={scan} scanning={scanning} setSection={setSection} firstName={firstName}/>:section==="prompts"?<Prompts demo={demo} brand={activeBrand} refreshKey={refreshKey} newUser={isNewUser}/>:section==="answers"?<Answers demo={demo} brand={activeBrand} refreshKey={refreshKey} scan={scan} scanning={scanning} newUser={isNewUser}/>:section==="fixes"?<Fixes demo={demo} brand={activeBrand} refreshKey={refreshKey} newUser={isNewUser} onViewProgressReport={()=>{setReportsTab("fixes");setSection("reports")}}/>:section==="competitors"?<Competitors demo={demo} brand={activeBrand} newUser={isNewUser}/>:section==="reports"?<Reports demo={demo} brand={activeBrand} refreshKey={refreshKey} newUser={isNewUser} reportsTab={reportsTab} setReportsTab={setReportsTab}/>:<SettingsPage demo={demo} brand={activeBrand} ctx={ctx} newUser={isNewUser} onBrandUpdated={updated=>setCtx(c=>c?{...c,brands:c.brands.map(b=>b.id===updated.id?{...b,...updated}:b)}:c)}/>}</div>
   </section>
   <CoachMarkTour demo={demo} active={section==="overview"}/>
+  {confirmScanOpen&&typeof document!=="undefined"&&createPortal(<div className="modal-back"><div className="modal">
+   <button className="modal-x" onClick={()=>setConfirmScanOpen(false)}><X/></button>
+   <span className="feature-icon"><Play/></span><h2>Before you scan</h2>
+   <p>A scan checks every tracked prompt against all 6 engines — it&apos;s worth reviewing your prompts first if you want to add, edit or remove any. Otherwise, run the scan now.</p>
+   <div style={{display:"flex",gap:"8px",marginTop:"4px"}}>
+    <button className="button outline" style={{flex:1}} onClick={()=>{setConfirmScanOpen(false);setSection("prompts")}}>Review prompts</button>
+    <button className="button" style={{flex:1}} onClick={()=>{setConfirmScanOpen(false);scan()}}>Run scan</button>
+   </div>
+  </div></div>,document.body)}
  </main>
 }
 
@@ -244,6 +255,7 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
  const history=useScanHistory(demo,brand,refreshKey);
  const [overviewTab,setOverviewTab]=useState<"summary"|"traffic"|"rankings">("summary");
  const [promptCount,setPromptCount]=useState<number|null>(null);
+ const [trendRange,setTrendRange]=useState<"7d"|"15d"|"30d">("30d");
  useEffect(()=>{
   if(demo||!brand)return;
   let cancelled=false;
@@ -251,11 +263,12 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
   return ()=>{cancelled=true};
  },[demo,brand,refreshKey]);
 
- const header=<div className="page-title"><div><span className="overline">OVERVIEW</span><h1>Good morning, {firstName} <span>👋</span></h1><p>Here&apos;s how your brand is showing up in AI answers.</p></div><div className="date-control">Last 30 days <ChevronDown/></div></div>;
+ const header=<div className="page-title"><div><span className="overline">OVERVIEW</span><h1>Good morning, {firstName} <span>👋</span></h1><p>Here&apos;s how your brand is showing up in AI answers.</p></div><div className="date-control"><select value={trendRange} onChange={e=>setTrendRange(e.target.value as "7d"|"15d"|"30d")} style={{border:0,background:"transparent",color:"inherit",font:"inherit",cursor:"pointer",appearance:"none",paddingRight:"2px"}} aria-label="Trend chart range"><option value="7d">Last 7 days</option><option value="15d">Last 15 days</option><option value="30d">Last 30 days</option></select><ChevronDown/></div></div>;
  const tabBar=<div className="overview-tabs"><button className={overviewTab==="summary"?"active":""} onClick={()=>setOverviewTab("summary")}>Summary</button><button className={overviewTab==="traffic"?"active":""} onClick={()=>setOverviewTab("traffic")}>Traffic &amp; Reach</button><button className={overviewTab==="rankings"?"active":""} onClick={()=>setOverviewTab("rankings")}>Rankings</button></div>;
 
  if(demo)return <>{header}{tabBar}
   {overviewTab==="summary"&&<>
+   <p style={{fontSize:"12px",color:"var(--muted)",margin:"0 0 8px"}}>Last scanned {formatTimestamp(new Date().toISOString(),"datetime")}</p>
    <ScoreHero score={67} trend="8.2%" confidence="Full scan"/>
    <div className="stats-grid"><Stat label="Total mentions" value="142" trend="12.4%" icon={Activity}/><Stat label="Average position" value="#2.4" sub="when mentioned" icon={Target}/><Stat label="Prompts tracked" value="183" sub="of 250 monthly" icon={Search}/><Stat label="AI engines" value="6" sub="ChatGPT · Gemini · Perplexity · Claude · DeepSeek · AI Overviews" icon={BarChart3}/></div>
    <div className="dashboard-grid"><article className="panel visibility-panel"><PanelHead title="Visibility trend" sub="Your share of AI answers over time"/><div className="chart-legend"><span><i/>Your brand</span><span><i/>Top competitor</span></div><div className="big-chart"><div className="axis"><span>80%</span><span>60%</span><span>40%</span><span>20%</span><span>0%</span></div><svg viewBox="0 0 800 260" preserveAspectRatio="none"><defs><linearGradient id="appfill"><stop offset="0" stopColor="#0EA5E9" stopOpacity=".22"/><stop offset="1" stopColor="#0EA5E9" stopOpacity="0"/></linearGradient></defs><path className="grid-lines" d="M0 10H800M0 70H800M0 130H800M0 190H800M0 250H800"/><path className="competitor-line" d="M0 158 C90 144 110 118 190 125 S300 98 380 112 S510 75 590 92 S700 65 800 68"/><path className="trend-area" d="M0 205 C80 195 110 185 170 188 S260 143 330 153 S440 115 510 125 S625 80 690 92 S760 50 800 43 L800 260L0 260Z"/><path className="trend-line" d="M0 205 C80 195 110 185 170 188 S260 143 330 153 S440 115 510 125 S625 80 690 92 S760 50 800 43"/><circle cx="800" cy="43" r="5"/></svg><div className="x-axis"><span>Jun 19</span><span>Jun 25</span><span>Jul 1</span><span>Jul 7</span><span>Jul 13</span><span>Jul 19</span></div></div></article>
@@ -279,11 +292,13 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
  const byEngine=groupByEngine(latest.answers);
  const cmp=compareToPrevious(history,latest.runId);
  const delta=cmp.absoluteDelta;
- const sparkData=history.map(h=>({score:h.score,date:h.completedAt||""}));
+ const trendRangeDays={"7d":7,"15d":15,"30d":30}[trendRange];
+ const sparkData=history.filter(h=>isWithinDays(h.completedAt,trendRangeDays)).map(h=>({score:h.score,date:h.completedAt||""}));
 
  return <>{header}{tabBar}
   <OnboardingChecklist input={{hasBrand:true,promptCount:promptCount??0,scanCount:history.length}} onNavigate={setSection} onRunScan={scan} brandId={brand.id}/>
   {overviewTab==="summary"&&<>
+   <p style={{fontSize:"12px",color:"var(--muted)",margin:"0 0 8px"}}>Last scanned {formatTimestamp(latest.completedAt,"datetime")}</p>
    <ScoreHero score={summary.score} confidence={coverageLabel(latest.confidence??0)} delta={delta} sparkData={sparkData}/>
    <div className="stats-grid">
     <Stat label="Total mentions" value={String(summary.mentions)} sub={`of ${summary.total} answers checked`} icon={Activity}/>
@@ -717,7 +732,7 @@ const DEMO_FIXES=[
  {id:"d7",category:"gbp",title:"Complete your Google Business Profile",desc:"Missing hours and category fields reduce confidence in local answers.",lift:"4–8%",effort:"~10 min",status:"implementing"}
 ];
 
-function Fixes({demo,brand,refreshKey,newUser}:{demo:boolean;brand?:Brand;refreshKey:number;newUser:boolean}){
+function Fixes({demo,brand,refreshKey,newUser,onViewProgressReport}:{demo:boolean;brand?:Brand;refreshKey:number;newUser:boolean;onViewProgressReport:()=>void}){
  const [fixesTab,setFixesTab]=useState<"fixes"|"seo">("fixes");
  const [fixes,setFixes]=useState<Fix[]>([]);
  const [loading,setLoading]=useState(!demo);
@@ -745,7 +760,7 @@ function Fixes({demo,brand,refreshKey,newUser}:{demo:boolean;brand?:Brand;refres
   setUpdatingId(null);await loadFixes();
  }
 
- const pageHeader=<><div className="page-title"><div><span className="overline">AI FIX GENERATOR</span><h1>Turn gaps into growth</h1><p>{demo?"Actionable recommendations based on where competitors beat you.":brand?`Recommendations for ${brand.name} from your most recent scan.`:"Add a client and run a scan to generate recommendations."}</p></div></div><TabTip tabId="fixes" newUser={newUser} text="After a scan, Claude suggests specific fixes to improve your score — track each one from pending to done."/></>;
+ const pageHeader=<><div className="page-title"><div><span className="overline">AI FIX GENERATOR</span><h1>Turn gaps into growth</h1><p>{demo?"Actionable recommendations based on where competitors beat you.":brand?`Recommendations for ${brand.name} from your most recent scan.`:"Add a client and run a scan to generate recommendations."}</p></div><button className="button outline" onClick={onViewProgressReport}>View progress report</button></div><TabTip tabId="fixes" newUser={newUser} text="After a scan, Claude suggests specific fixes to improve your score — track each one from pending to done."/></>;
  const tabBar=<div className="overview-tabs" style={{marginBottom:"14px"}}><button className={fixesTab==="fixes"?"active":""} onClick={()=>setFixesTab("fixes")}><WandSparkles size={14}/>AI Visibility Fixes</button><button className={fixesTab==="seo"?"active":""} onClick={()=>setFixesTab("seo")}><Globe size={14}/>SEO Audit</button></div>;
 
  if(fixesTab==="seo") return <>{pageHeader}{tabBar}<SeoAuditTab demo={demo} brand={brand}/></>;
@@ -985,7 +1000,7 @@ type ReportDetail={
  traffic:GscData;
 };
 function groupByEngineRaw(answers:{engine:string;brand_mentioned:boolean}[]){const byKey=new Map<string,{mentioned:number;total:number}>();for(const a of answers){const e=byKey.get(a.engine)||{mentioned:0,total:0};e.total++;if(a.brand_mentioned)e.mentioned++;byKey.set(a.engine,e)}return Array.from(byKey.entries()).map(([key,{mentioned,total}])=>{const meta=engineByKey[key]||{name:key,short:key[0]?.toUpperCase()||"?",color:"green"};const pct=total?Math.round(mentioned/total*100):0;return{key,name:meta.name,short:meta.short,color:meta.color,pct}})}
-function Reports({demo,brand,refreshKey,newUser}:{demo:boolean;brand?:Brand;refreshKey:number;newUser:boolean}){
+function Reports({demo,brand,refreshKey,newUser,reportsTab,setReportsTab}:{demo:boolean;brand?:Brand;refreshKey:number;newUser:boolean;reportsTab:"scans"|"fixes";setReportsTab:(t:"scans"|"fixes")=>void}){
  const history=useScanHistory(demo,brand,refreshKey);
  const [viewRunId,setViewRunId]=useState<string|null>(null);
  const [report,setReport]=useState<ReportDetail|null>(null);
@@ -993,11 +1008,15 @@ function Reports({demo,brand,refreshKey,newUser}:{demo:boolean;brand?:Brand;refr
  async function openReport(runId:string){setViewRunId(runId);setReportLoading(true);const r=await fetch(`/api/reports/${runId}`);const j=await r.json().catch(()=>({}));setReport(j.run?j:null);setReportLoading(false)}
  function closeReport(){setViewRunId(null);setReport(null)}
  const header=<><div className="page-title"><div><span className="overline">REPORTS</span><h1>Visibility reports</h1><p>Every scan auto-generates a full report. Click any entry to view or export.</p></div></div><TabTip tabId="reports" newUser={newUser} text="Every scan generates a shareable report here, exportable to PDF for your team or clients."/></>;
- if(demo)return <>{header}<div className="report-grid">{["June 2026","Q2 summary","May 2026"].map((r,i)=><article className="panel report-card" key={r}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"12px"}}><span style={{fontSize:"10px",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",color:"var(--muted)"}}>SCAN #{3-i}</span><span style={{fontSize:"10px",fontWeight:700,padding:"3px 8px",borderRadius:"99px",background:"var(--sky-d)",color:"var(--sky)"}}>Demo</span></div><div style={{display:"flex",alignItems:"flex-end",gap:"14px",marginBottom:"16px"}}><span style={{fontSize:"52px",fontWeight:800,lineHeight:1,fontFamily:"Outfit,system-ui",color:"var(--em)",letterSpacing:"-2px"}}>{67-i*4}</span><div style={{paddingBottom:"5px"}}><div style={{fontSize:"11px",color:"var(--muted)",marginBottom:"2px"}}>AI Visibility Score</div><div style={{fontSize:"12px",fontWeight:600,color:"var(--ink)"}}>{14-i*2}/25 mentions</div></div></div><button className="button" style={{fontSize:"12px",padding:"7px 14px"}}>View report <ArrowUpRight style={{width:"13px"}}/></button></article>)}</div></>;
- if(!brand)return <>{header}<p style={{color:"var(--muted)",fontSize:"13px"}}>Add a client brand to start generating reports.</p></>;
- if(history.length===0)return <>{header}<div className="panel" style={{padding:"40px 32px",textAlign:"center"}}><FileText style={{width:"32px",color:"var(--faint)",marginBottom:"12px"}}/><p style={{margin:"0 0 8px",fontWeight:600,color:"var(--ink)"}}>No reports yet for {brand.name}</p><p style={{margin:0,fontSize:"13px",color:"var(--muted)"}}>Click <b>Run scan</b> above to generate your first AI visibility report.</p></div></>;
+ const subTabBar=<div className="overview-tabs" style={{marginBottom:"14px"}}><button className={reportsTab==="scans"?"active":""} onClick={()=>setReportsTab("scans")}><FileText size={14}/>Complete scan reports</button><button className={reportsTab==="fixes"?"active":""} onClick={()=>setReportsTab("fixes")}><WandSparkles size={14}/>AI Fixes progress</button></div>;
+
+ if(reportsTab==="fixes") return <>{header}{subTabBar}<FixesProgressReport demo={demo} brand={brand}/></>;
+
+ if(demo)return <>{header}{subTabBar}<div className="report-grid">{["June 2026","Q2 summary","May 2026"].map((r,i)=><article className="panel report-card" key={r}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"12px"}}><span style={{fontSize:"10px",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",color:"var(--muted)"}}>SCAN #{3-i}</span><span style={{fontSize:"10px",fontWeight:700,padding:"3px 8px",borderRadius:"99px",background:"var(--sky-d)",color:"var(--sky)"}}>Demo</span></div><div style={{display:"flex",alignItems:"flex-end",gap:"14px",marginBottom:"16px"}}><span style={{fontSize:"52px",fontWeight:800,lineHeight:1,fontFamily:"Outfit,system-ui",color:"var(--em)",letterSpacing:"-2px"}}>{67-i*4}</span><div style={{paddingBottom:"5px"}}><div style={{fontSize:"11px",color:"var(--muted)",marginBottom:"2px"}}>AI Visibility Score</div><div style={{fontSize:"12px",fontWeight:600,color:"var(--ink)"}}>{14-i*2}/25 mentions</div></div></div><button className="button" style={{fontSize:"12px",padding:"7px 14px"}}>View report <ArrowUpRight style={{width:"13px"}}/></button></article>)}</div></>;
+ if(!brand)return <>{header}{subTabBar}<p style={{color:"var(--muted)",fontSize:"13px"}}>Add a client brand to start generating reports.</p></>;
+ if(history.length===0)return <>{header}{subTabBar}<div className="panel" style={{padding:"40px 32px",textAlign:"center"}}><FileText style={{width:"32px",color:"var(--faint)",marginBottom:"12px"}}/><p style={{margin:"0 0 8px",fontWeight:600,color:"var(--ink)"}}>No reports yet for {brand.name}</p><p style={{margin:0,fontSize:"13px",color:"var(--muted)"}}>Click <b>Run scan</b> above to generate your first AI visibility report.</p></div></>;
  const reversed=[...history].reverse();
- return <>{header}
+ return <>{header}{subTabBar}
   <div className="report-grid">
    {reversed.map((h,ri)=>{const cmp=compareToPrevious(history,h.runId);const isFirst=cmp.isBaseline;const delta=cmp.absoluteDelta;const dateStr=formatTimestamp(h.completedAt,"datetime");const scoreColor=h.score>=70?"var(--em)":h.score>=45?"var(--am)":"var(--cr)";
    return <article className="panel report-card" key={h.runId} onClick={()=>openReport(h.runId)}>
@@ -1014,6 +1033,80 @@ function Reports({demo,brand,refreshKey,newUser}:{demo:boolean;brand?:Brand;refr
    </article>})}
   </div>
   {viewRunId&&<ReportViewer runId={viewRunId} report={report} loading={reportLoading} history={history} onClose={closeReport}/>}
+ </>;
+}
+
+const DEMO_FIX_TIMELINE:Record<string,{fromStatus:string|null;toStatus:string;createdAt:string}[]>={
+ d1:[{fromStatus:null,toStatus:"pending",createdAt:"2026-08-04T09:12:00Z"}],
+ d2:[{fromStatus:null,toStatus:"pending",createdAt:"2026-08-04T09:12:00Z"},{fromStatus:"pending",toStatus:"implementing",createdAt:"2026-08-05T14:02:00Z"}],
+ d3:[{fromStatus:null,toStatus:"pending",createdAt:"2026-08-04T09:12:00Z"}],
+ d4:[{fromStatus:null,toStatus:"pending",createdAt:"2026-07-29T08:40:00Z"},{fromStatus:"pending",toStatus:"implementing",createdAt:"2026-07-30T11:15:00Z"},{fromStatus:"implementing",toStatus:"done",createdAt:"2026-08-01T16:47:00Z"}],
+ d5:[{fromStatus:null,toStatus:"pending",createdAt:"2026-08-04T09:12:00Z"}],
+ d6:[{fromStatus:null,toStatus:"pending",createdAt:"2026-08-04T09:12:00Z"}],
+ d7:[{fromStatus:null,toStatus:"pending",createdAt:"2026-08-04T09:12:00Z"},{fromStatus:"pending",toStatus:"implementing",createdAt:"2026-08-05T10:20:00Z"}]
+};
+const FIX_STATUS_ORDER=["all","pending","implementing","done"] as const;
+const FIX_STATUS_LABEL:Record<string,string>={all:"All fixes",pending:"Pending",implementing:"In progress",done:"Done"};
+
+// Status-change history comes from the audit log (#3 in session_notes), not the fixes table
+// itself -- fixes only ever store their current status, so without the log there'd be no way
+// to show "moved from pending to implementing on [date]", only the end state.
+function FixesProgressReport({demo,brand}:{demo:boolean;brand?:Brand}){
+ const [statusTab,setStatusTab]=useState<string>("all");
+ const [fixes,setFixes]=useState<Fix[]>([]);
+ const [history,setHistory]=useState<Record<string,{fromStatus:string|null;toStatus:string;createdAt:string}[]>>({});
+ const [scanDates,setScanDates]=useState<Record<string,string|null>>({});
+ const [loading,setLoading]=useState(!demo);
+
+ useEffect(()=>{
+  if(demo||!brand){setLoading(false);return}
+  let cancelled=false;
+  (async()=>{
+   setLoading(true);
+   const [{createClient},{getFixes,getScanDates},{getFixStatusHistory}]=await Promise.all([import("@/lib/supabase/client"),import("@/lib/data/fixes"),import("@/lib/data/auditLog")]);
+   const supabase=createClient();
+   const [fixRows,statusHistory]=await Promise.all([getFixes(supabase,brand.id),getFixStatusHistory(supabase,brand.id)]);
+   const scanRunIds=[...new Set(fixRows.map(f=>f.scan_run_id).filter((id):id is string=>!!id))];
+   const dates=await getScanDates(supabase,scanRunIds);
+   if(!cancelled){setFixes(fixRows);setHistory(statusHistory);setScanDates(dates);setLoading(false)}
+  })();
+  return ()=>{cancelled=true};
+ },[demo,brand]);
+
+ const items=demo
+  ?DEMO_FIXES.map(f=>({id:f.id,category:f.category,title:f.title,status:f.status,generated:"2026-08-04T09:12:00Z",scanRunId:null as string|null}))
+  :fixes.map(f=>({id:f.id,category:f.category,title:f.title,status:f.status||"pending",generated:f.created_at,scanRunId:f.scan_run_id}));
+ const counts=Object.fromEntries(FIX_STATUS_ORDER.map(s=>[s,s==="all"?items.length:items.filter(f=>f.status===s).length]));
+ const shown=statusTab==="all"?items:items.filter(f=>f.status===statusTab);
+
+ if(!demo&&!brand)return <p style={{color:"var(--muted)",fontSize:"13px"}}>Add a client first to see AI fixes progress.</p>;
+ if(!demo&&loading)return <p>Loading…</p>;
+ if(!demo&&!items.length)return <EmptyState icon={WandSparkles} headline="No fixes yet for this brand" subtext="Run a scan to generate AI fixes — their progress and status history will show up here." />;
+
+ return <>
+  <div className="fix-cat-tabs">{FIX_STATUS_ORDER.map(s=><button key={s} className={statusTab===s?"fix-cat-tab active":"fix-cat-tab"} onClick={()=>setStatusTab(s)}><span className="dot" style={{background:s==="all"?"var(--muted)":s==="done"?"var(--em)":s==="implementing"?"var(--sky)":"var(--faint)"}}/>{FIX_STATUS_LABEL[s]}<span className="cnt">{counts[s]}</span></button>)}</div>
+  <div style={{display:"grid",gap:"10px"}}>
+   {shown.map(f=>{
+    const timeline=demo?DEMO_FIX_TIMELINE[f.id]||[]:history[f.id]||[];
+    const scanDate=demo?"2026-08-04T09:10:00Z":(f.scanRunId?scanDates[f.scanRunId]:null);
+    return <article className="panel" key={f.id} style={{padding:"18px 20px"}}>
+     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:"12px",marginBottom:"8px"}}>
+      <div><span className={`fix-type ${fixCategoryClass(f.category)}`}>{FIX_CATEGORY_LABEL[f.category]||f.category}</span><h3 style={{margin:"6px 0 0",font:"700 14px 'Outfit',system-ui",color:"var(--ink)"}}>{f.title}</h3></div>
+      <span style={{fontSize:"10.5px",fontWeight:700,padding:"4px 10px",borderRadius:"99px",flexShrink:0,background:f.status==="done"?"var(--em-d)":f.status==="implementing"?"var(--sky-d)":"var(--soft)",color:f.status==="done"?"var(--em)":f.status==="implementing"?"var(--sky)":"var(--muted)"}}>{fixStatusLabel[f.status]||f.status}</span>
+     </div>
+     <div style={{display:"flex",gap:"18px",fontSize:"11.5px",color:"var(--muted)",marginBottom:"12px"}}>
+      <span>Generated <b style={{color:"var(--ink)"}}>{formatTimestamp(f.generated,"datetime")}</b></span>
+      <span>From scan <b style={{color:"var(--ink)"}}>{scanDate?formatTimestamp(scanDate,"datetime"):"Not linked to a scan"}</b></span>
+     </div>
+     <div style={{borderTop:"1px solid var(--line)",paddingTop:"10px",display:"grid",gap:"6px"}}>
+      {timeline.length===0
+       ?<div style={{fontSize:"11.5px",color:"var(--muted)"}}>No status changes recorded yet.</div>
+       :timeline.map((t,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:"8px",fontSize:"11.5px",color:"var(--muted)"}}><span style={{width:"6px",height:"6px",borderRadius:"50%",background:t.toStatus==="done"?"var(--em)":t.toStatus==="implementing"?"var(--sky)":"var(--faint)",flexShrink:0}}/>{t.fromStatus?`${fixStatusLabel[t.fromStatus]||t.fromStatus} → ${fixStatusLabel[t.toStatus]||t.toStatus}`:`Generated as ${fixStatusLabel[t.toStatus]||t.toStatus}`} on {formatTimestamp(t.createdAt,"datetime")}</div>)}
+     </div>
+     {f.status!=="done"&&<p style={{fontSize:"11px",color:"var(--sky)",marginTop:"10px",paddingTop:"10px",borderTop:"1px dashed var(--line)"}}>Check back after your next scheduled scan to see if this moves forward.</p>}
+    </article>;
+   })}
+  </div>
  </>;
 }
 const SEO_CATEGORY_LABEL:Record<string,string>={technical:"Technical SEO",meta:"On-page SEO",content:"Content",performance:"Performance",mobile:"Mobile",accessibility:"Accessibility",links:"Links",schema:"Structured Data"};
