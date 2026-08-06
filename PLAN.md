@@ -4,7 +4,7 @@ Working plan for the product. Detailed history, architectural decisions and debu
 notes live in [`.claude/session_notes.md`](.claude/session_notes.md); this file is the
 short version: what's done, what's next, and why.
 
-Last updated: 2026-08-04 (Reports/SEO Audit/Traffic upgrade — code shipped, migration needs to be run)
+Last updated: 2026-08-06 (First-run UX — onboarding checklist, empty states, coach-mark tour, Answers view — shipped and pushed to production)
 
 ---
 
@@ -15,22 +15,24 @@ weeks; "delete stale Vercel projects" is one row and five minutes. Read the size
 in the backlog before reading anything into the percentage.
 
 ```
-Product features    ████████████████████████░░  16 / 17   94%
+Product features    █████████████████████████░  17 / 18   94%
 Engineering health  ██████████████████████████   7 / 7    100%
-Known debt          ██████████████████████████   3 / 3    100%
+Known debt          ██████████████████████████   4 / 4    100%
 ────────────────────────────────────────────────────────────
-Overall             █████████████████████████░  26 / 27    96%
+Overall             █████████████████████████░  28 / 29    97%
 ```
 
 | Area | Done | Open |
 |---|---:|---:|
-| Product features | 16 | 1 |
+| Product features | 17 | 1 |
 | Engineering health | 7 | 0 |
-| Known debt | 3 | 0 |
-| **Total** | **26** | **1** |
+| Known debt | 4 | 0 |
+| **Total** | **28** | **1** |
 
 Only billing is left, and it needs your Stripe account and real pricing. Everything I can
-build without you is built.
+build without you is built. (The gap analysis also flagged a landing-page demo video, a
+custom domain, and a free pre-signup checker tool — those need you too, not code; see
+`.claude/session_notes.md` #12.)
 
 ### Shipped — product
 
@@ -51,7 +53,8 @@ build without you is built.
 | 13 | Score-drop email alerts | Resend, fires on a 10+ point fall vs the previous scan |
 | 14 | Team members | Invite by email with roles, accept flow, revoke and remove |
 | 15 | Multi-workspace switching | Sidebar switcher; appears only for people in 2+ workspaces |
-| 16 | Reports, SEO Audit & Traffic upgrade | Timestamps everywhere; GSC 7/30/90-day + custom date ranges; 10-tab SEO audit (incl. Google PageSpeed Insights); reports embed the full audit + traffic + a historical score-trend chart. Detail in `.claude/session_notes.md`. **Needs the `seo_audits` migration run manually — see Known debt #7.** |
+| 16 | Reports, SEO Audit & Traffic upgrade | Timestamps everywhere; GSC 7/30/90-day + custom date ranges; 10-tab SEO audit (incl. Google PageSpeed Insights); reports embed the full audit + traffic + a historical score-trend chart. Detail in `.claude/session_notes.md`. Migration run 2026-08-04 — Run Audit confirmed working in production. |
+| 17 | First-run UX | Onboarding checklist (4 steps, derived from real brand/prompt/scan state), consistent empty states across Prompts/Competitors/Overview, a skippable coach-mark tour, and a new Answers tab showing every engine's raw response with the brand mention highlighted. Driven by a competitive gap analysis; detail in `.claude/session_notes.md` #12. Shipped 2026-08-06. |
 
 ### Shipped — engineering health
 
@@ -123,7 +126,17 @@ Sidebar switcher, rendered only for people in 2+ workspaces. `getWorkspaceContex
 every membership with the caller's role in each, and `/api/team` takes an explicit
 workspace id so it can't manage the wrong team after a switch.
 
-### 6. Billing & usage — size L — **needs your Stripe account and pricing**
+### ~~6. First-run UX~~ — DONE 2026-08-06
+
+Onboarding checklist, standardized empty states, a skippable coach-mark tour, and a new
+Answers tab (raw engine responses with the brand mention highlighted). Came out of a
+competitive gap analysis showing AskVisible matches or beats Peec/Profound on raw capability
+but ships with zero guided onboarding — new users landed on an empty dashboard with no
+signal of what to do first. Detail, scope boundaries, and what's still explicitly out of
+scope (demo video, custom domain, the free pre-signup checker) in
+`.claude/session_notes.md` #12. Pushed to `origin/master` 2026-08-06.
+
+### 7. Billing & usage — size L — **needs your Stripe account and pricing**
 
 `workspaces.plan` and `usage_months` already exist. Blocked on things only you can supply:
 a Stripe account and keys, the actual price points and tiers, and what happens when a
@@ -138,38 +151,12 @@ schema, so guessing them would mean rework.
 |---|---|---|
 | 5 | `scan_frequency` / `scan_day` missing from `schema.sql` | **Open** — item 1 above |
 | 6 | GSC migration must be run manually | Open by design; documented in `schema.sql` |
-| 7 | `seo_audits` migration must be run manually | **Open** — same pattern as #6, see below |
+| 7 | `seo_audits` migration must be run manually | Resolved 2026-08-04 (you) — table + RLS created, Run Audit confirmed working |
 | 1–4 | Fixes RLS, weak prompts, brand profile save, prompts edit UI | Resolved |
 
-**#7 setup — run this before clicking "Run Audit" in production:**
-1. Open the Supabase dashboard for this project → SQL Editor → New query.
-2. Paste and run:
-   ```sql
-   create table public.seo_audits (
-     id uuid primary key default uuid_generate_v4(),
-     brand_id uuid not null references public.brands(id) on delete cascade,
-     domain text not null,
-     checks jsonb not null default '[]',
-     overall_score integer not null default 0,
-     created_at timestamptz not null default now()
-   );
-   create index seo_audits_brand_created_idx on public.seo_audits (brand_id, created_at desc);
-
-   alter table public.seo_audits enable row level security;
-
-   create policy "members read seo_audits" on public.seo_audits for select using (exists(select 1 from public.brands b where b.id = seo_audits.brand_id and public.is_workspace_member(b.workspace_id)));
-   create policy "members manage seo_audits" on public.seo_audits for all using (exists(select 1 from public.brands b where b.id = seo_audits.brand_id and public.is_workspace_member(b.workspace_id))) with check (exists(select 1 from public.brands b where b.id = seo_audits.brand_id and public.is_workspace_member(b.workspace_id)));
-   ```
-3. Confirm: `select * from seo_audits limit 1;` should return zero rows, not an error.
-4. Go to AI Fixes → SEO Audit → click **Run Audit**. Should complete instead of erroring.
-
-Optional on top of this: set `PAGESPEED_API_KEY` in Vercel to enable the Performance and
+Optional on top of #7: set `PAGESPEED_API_KEY` in Vercel to enable the Performance and
 Accessibility tabs. Without it those two tabs just say "not configured" instead of showing
 fabricated data — nothing else depends on it.
-
-Until the migration runs, the SEO Audit tab and the report's embedded audit section degrade
-gracefully to "no audit yet" (reads return null, nothing crashes) — only the "Run Audit" /
-"Re-audit" button itself will fail with a clear error until the table exists.
 
 ---
 

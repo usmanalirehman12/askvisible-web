@@ -1,6 +1,6 @@
 # AskVisibleAI — Session Notes
 
-**Last updated:** 2026-08-02  
+**Last updated:** 2026-08-06 (First-run UX: onboarding checklist, empty states, coach-mark tour, Answers view — shipped, pushed to production)  
 **Repo:** usmanalirehman12/askvisible-web  
 **Deploy:** https://askvisible-web-mfu2.vercel.app  
 **Local:** `C:\Users\zayns\OneDrive\Documents\websitefixer`  
@@ -269,6 +269,22 @@ An 8-part request: timestamps everywhere, Google traffic with date filters, a co
 **Verified:** `npx tsc --noEmit`, `npm test` (162 passing, +11 new for `compareToPrevious`/`formatTimestamp`), `npm run deadcode` (clean), `npm run build` (all three new `/api/seo-audit/*` routes present in the manifest). Dev server boots clean and `/app` correctly redirects to `/login` with no console errors.
 
 **Not verified — needs you, against production:** everything behind real Supabase auth (this environment doesn't have your login) and everything behind real Google credentials — actual PageSpeed scores, actual Search Console date-range data, an actual audit run against a live domain. See `PLAN.md` for the exact manual-migration steps this needs before "Run Audit" will work.
+
+### 12. First-run UX: onboarding checklist, empty states, coach-mark tour, Answers view (2026-08-06)
+
+Driven by a competitive gap analysis (`updated_gaps.md`, run against Peec AI/Profound/Rankability/Radarkit/Vizup) whose core finding was that AskVisible matches or beats competitors on raw capability but ships with **zero guided onboarding** — a new user lands on an empty dashboard with no signal of what to do first, while Peec documents a 10-minute quickstart and Profound leads with AI-assisted setup. Two of the recommended fixes were independently corroborated by this file: line 282's "an Answers section that doesn't exist in the shipped UI" note, and Known Bug #8/#10's explicit call-out that raw answer text had no dedicated view. Full plan, options considered, and scope boundaries: `C:\Users\zayns\.claude\plans\what-left-in-the-iterative-ocean.md`.
+
+**Shipped:**
+- **`app/components/EmptyState.tsx`** — standardizes the icon+headline+subtext+CTA pattern that previously only existed (inconsistently) on Fixes and Reports. Applied to Prompts, Competitors, and Overview's no-brand state, replacing four bare `<p>No X yet.</p>` fallbacks.
+- **`app/components/OnboardingChecklist.tsx`** + **`lib/onboarding/checklistState.ts`** — persistent 4-step card on Overview (confirm brand → review prompts → run first scan → view first report). Step completion is *derived* from data already loaded (`hasBrand`/`promptCount`/`scanCount`), not a new DB column or flag — same "don't persist what you can compute" stance the codebase already took on `scan_runs.score` (see #11 above). Only the dismissed state persists, via `localStorage['av-onboarding-dismissed']`, matching the existing `av-*` key convention (`av-theme`, `av-active-brand`). The derivation logic lives in a pure function (`computeChecklistSteps`) with 5 new `vitest` tests — the component itself is untested, consistent with every other dashboard component in this 1231-line file having zero component tests.
+- **`app/components/CoachMarkTour.tsx`** — 3-step skippable tour, positioned via `getBoundingClientRect()` against existing DOM anchors (`.brand-switch`, `.scan-btn`, a new `data-tour="score-hero"` attribute added to `ScoreHero`'s root div). Fires once via `localStorage['av-has-seen-tour']`. Explicitly skipped when `demo` is true — a visitor exploring demo mode hasn't signed up yet and shouldn't be tour-gated before the "aha" moment.
+- **Answers tab** — new nav entry in `app/app/page.tsx` promoting the raw-response expand row (added in #10) to a first-class tab with engine/status filters. Scoped to the **latest scan only** (matches the existing Reports card pattern — one report, one scan's answers; no scan picker). Reuses `GET /api/reports/[runId]` unchanged (it already returns `text`/`createdAt` per #10) — no API changes needed. Adds `highlightMentions()`, a small regex wrapper that `<mark>`s every case-insensitive occurrence of the brand name in the raw response text, directly answering the "see the data behind the score" gap and giving a permanent UI fix for the exact failure class in Known Bug #8 (a silently-empty answer is now visually obvious instead of requiring a Supabase query to catch).
+
+**Scope boundaries (flagged, not silently dropped):** the gap analysis also recommended a landing-page demo video, a custom domain (off the raw Vercel URL), Stripe billing, and a free pre-signup "AI Visibility Check" tool. None of these are code-only changes — video production, DNS, and Stripe/pricing all need the user directly, and billing is already the sole open item in `PLAN.md`. Not touched here.
+
+**Verified:** `npx tsc --noEmit` clean, `npm test` (169 passing, +5 new for `checklistState`), `npm run deadcode` clean, `npm run build` succeeds. Manually walked demo mode in-browser (temporarily renamed `.env.local` to force `demo=true`, restored byte-identical afterward, confirmed via `diff`) — confirmed the Answers tab renders, row expansion works, and `Acme Software` gets wrapped in `<mark>` in the raw response text. Checklist and tour correctly do not render in demo mode. Committed as `12d1dc8` and pushed to `origin/master`.
+
+**Not verified — needs you, against production:** the checklist's real progression through brand→prompts→scan→report for a genuinely new signup (this environment doesn't have your login), and the tour firing exactly once and not re-appearing (clear `localStorage['av-has-seen-tour']` to re-test).
 
 ---
 
