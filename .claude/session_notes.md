@@ -1,6 +1,6 @@
 # AskVisibleAI — Session Notes
 
-**Last updated:** 2026-08-06 (Audit trail + AI Fixes progress report — migration run, live in production)  
+**Last updated:** 2026-08-06 (Fixed the Overview date-range dropdown, added PDF export to the AI Fixes progress report — code shipped, not yet pushed)  
 **Repo:** usmanalirehman12/askvisible-web  
 **Deploy:** https://askvisible-web-mfu2.vercel.app  
 **Local:** `C:\Users\zayns\OneDrive\Documents\websitefixer`  
@@ -469,6 +469,55 @@ button paths (this environment can't trigger it — it's gated to real, non-demo
 there's no login here); a real, non-demo walkthrough confirming an actual audit-log row gets
 written when you start a scan or change a fix's status, and that a fix generated after the
 migration shows a real "From scan" date instead of "Not linked to a scan."
+
+### 16. Fixed the Overview range dropdown (real bug), added PDF export to Fixes progress report (2026-08-06)
+
+You reported the 7/15/30-day dropdown added in #15 "doesn't generate anything when clicked" —
+investigated and found two separate, real bugs, not one:
+
+1. **Demo mode was completely disconnected.** The dropdown's `trendRange` state existed, but
+   demo's `<ScoreHero score={67} trend="8.2%" .../>` call never passed `sparkData` at all —
+   it used a separate `trend` prop path, and the big "Visibility trend" panel above it is a
+   fully static SVG unrelated to any range. Nothing on the entire demo Overview page reacted
+   to the dropdown, which is almost certainly what you were testing (no login needed).
+2. **Real accounts**: `ScoreHero` only rendered its trend area when `sparkData.length>=2`
+   (no `else` branch) — since most brands don't scan daily, "Last 7 days" routinely left
+   0-1 points in range and the entire trend area silently vanished with zero explanation.
+
+**Fixes:** demo mode gets a real `demoSparkData` array (`app/app/page.tsx`) — 8 points spaced
+unevenly over the last 30 days, computed relative to page-load time (`Date.now()`, not
+hardcoded past dates) so the demo always has something real to filter regardless of when it's
+viewed, and each range window shows a visibly different point count (7d: 3, 15d: 5, 30d: 8)
+so the fix is actually demonstrable. `ScoreHero` now renders a fallback message ("No scans in
+this range" / "Only 1 scan in this range — try a wider window") instead of rendering nothing
+when `sparkData` exists but has fewer than 2 points — applies to both demo and real accounts.
+
+**AI Fixes progress report export** — you asked for this to be exportable with full fix
+detail, and to see the UI before anything was built; a mockup was shown and confirmed before
+writing code, including confirming the export always includes every fix regardless of the
+on-screen status filter (not just whatever's currently visible) — consistent with this
+report's role as a record, not a working view. Implementation reuses the exact pattern
+`ReportViewer` already established (`window.print()` + `@media print` CSS,
+`app/globals.css`), extracted the row markup into a shared `FixProgressRow` component so the
+on-screen filtered list and the print document don't duplicate JSX, and added a
+`.fpr-print-doc` block — hidden on-screen (`display:none`), shown only in print via a new
+`@media print` rule — containing a document header (brand, export timestamp), a 4-up summary
+stat row (total/pending/in progress/done), and every fix unfiltered. The on-screen filtered
+list and toolbar both got `.no-print` so they never show up in the exported PDF alongside the
+dedicated print document.
+
+**Verified:** `npx tsc --noEmit` clean, `npm test` (178 passing, no logic changed so no new
+tests), `npm run deadcode` clean, `npm run build` succeeds. Walked through in demo mode (same
+`.env.local` rename/restore technique, diff-verified identical afterward): confirmed "8 scans
+tracked" shows at 30 days and correctly drops to "3 scans tracked" at 7 days (previously
+nothing rendered at any range); confirmed the print document exists, stays hidden on-screen,
+and always contains all 7 fixes with correct summary counts even after filtering the on-screen
+list down to just "Pending" (4 shown on-screen vs. 7 still in the print document, confirmed
+via direct DOM inspection).
+
+**Not verified — needs you:** the actual PDF output from a real browser print dialog (this
+environment can trigger `window.print()` programmatically but can't inspect the resulting
+print preview/PDF), and the export against a real, non-demo brand's fixes.
 
 ---
 

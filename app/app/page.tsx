@@ -22,6 +22,11 @@ const engines=[{name:"ChatGPT",short:"G",color:"green"},{name:"Gemini",short:"�
 const engineByKey:Record<string,{name:string;short:string;color:string}>={openai:engines[0],gemini:engines[1],perplexity:engines[2],anthropic:engines[3],deepseek:engines[4],ai_overviews:engines[5]};
 const nav=[{id:"overview",label:"Overview",icon:LayoutDashboard},{id:"prompts",label:"Prompts",icon:Search},{id:"answers",label:"Answers",icon:MessageSquare},{id:"competitors",label:"Competitors",icon:Users},{id:"fixes",label:"AI Fixes",icon:WandSparkles},{id:"reports",label:"Reports",icon:FileText}];
 const demoEngines=[{name:"ChatGPT",short:"G",score:74,color:"green"},{name:"Gemini",short:"◆",score:68,color:"blue"},{name:"Perplexity",short:"P",score:61,color:"teal"},{name:"Claude",short:"C",score:54,color:"orange"},{name:"DeepSeek",short:"D",score:48,color:"crimson"},{name:"AI Overviews",short:"◈",score:55,color:"cobalt"}];
+// Relative to page-load time (not hardcoded past dates) so the 7/15/30-day range picker on
+// Overview always has something real to filter regardless of when the demo is viewed —
+// spaced unevenly so each window shows a visibly different point count (7d: 3, 15d: 5, 30d: 8).
+const daysAgoIso=(n:number)=>new Date(Date.now()-n*24*60*60*1000).toISOString();
+const demoSparkData=[27,21,16,12,8,5,2,0].map((d,i)=>({score:[52,55,58,60,63,65,67,67][i],date:daysAgoIso(d)}));
 const demoPrompts=[
   {q:"Best AI visibility tools for SaaS companies",engine:"ChatGPT",status:"Mentioned",position:2,sentiment:"Positive",change:1},
   {q:"How can I track my brand in AI search?",engine:"Gemini",status:"Mentioned",position:3,sentiment:"Positive",change:0},
@@ -266,10 +271,13 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
  const header=<div className="page-title"><div><span className="overline">OVERVIEW</span><h1>Good morning, {firstName} <span>👋</span></h1><p>Here&apos;s how your brand is showing up in AI answers.</p></div><div className="date-control"><select value={trendRange} onChange={e=>setTrendRange(e.target.value as "7d"|"15d"|"30d")} style={{border:0,background:"transparent",color:"inherit",font:"inherit",cursor:"pointer",appearance:"none",paddingRight:"2px"}} aria-label="Trend chart range"><option value="7d">Last 7 days</option><option value="15d">Last 15 days</option><option value="30d">Last 30 days</option></select><ChevronDown/></div></div>;
  const tabBar=<div className="overview-tabs"><button className={overviewTab==="summary"?"active":""} onClick={()=>setOverviewTab("summary")}>Summary</button><button className={overviewTab==="traffic"?"active":""} onClick={()=>setOverviewTab("traffic")}>Traffic &amp; Reach</button><button className={overviewTab==="rankings"?"active":""} onClick={()=>setOverviewTab("rankings")}>Rankings</button></div>;
 
- if(demo)return <>{header}{tabBar}
+ if(demo){
+  const demoRangeDays={"7d":7,"15d":15,"30d":30}[trendRange];
+  const demoSpark=demoSparkData.filter(d=>isWithinDays(d.date,demoRangeDays));
+  return <>{header}{tabBar}
   {overviewTab==="summary"&&<>
    <p style={{fontSize:"12px",color:"var(--muted)",margin:"0 0 8px"}}>Last scanned {formatTimestamp(new Date().toISOString(),"datetime")}</p>
-   <ScoreHero score={67} trend="8.2%" confidence="Full scan"/>
+   <ScoreHero score={67} confidence="Full scan" delta={demoSpark.length>=2?demoSpark[demoSpark.length-1].score-demoSpark[demoSpark.length-2].score:null} sparkData={demoSpark}/>
    <div className="stats-grid"><Stat label="Total mentions" value="142" trend="12.4%" icon={Activity}/><Stat label="Average position" value="#2.4" sub="when mentioned" icon={Target}/><Stat label="Prompts tracked" value="183" sub="of 250 monthly" icon={Search}/><Stat label="AI engines" value="6" sub="ChatGPT · Gemini · Perplexity · Claude · DeepSeek · AI Overviews" icon={BarChart3}/></div>
    <div className="dashboard-grid"><article className="panel visibility-panel"><PanelHead title="Visibility trend" sub="Your share of AI answers over time"/><div className="chart-legend"><span><i/>Your brand</span><span><i/>Top competitor</span></div><div className="big-chart"><div className="axis"><span>80%</span><span>60%</span><span>40%</span><span>20%</span><span>0%</span></div><svg viewBox="0 0 800 260" preserveAspectRatio="none"><defs><linearGradient id="appfill"><stop offset="0" stopColor="#0EA5E9" stopOpacity=".22"/><stop offset="1" stopColor="#0EA5E9" stopOpacity="0"/></linearGradient></defs><path className="grid-lines" d="M0 10H800M0 70H800M0 130H800M0 190H800M0 250H800"/><path className="competitor-line" d="M0 158 C90 144 110 118 190 125 S300 98 380 112 S510 75 590 92 S700 65 800 68"/><path className="trend-area" d="M0 205 C80 195 110 185 170 188 S260 143 330 153 S440 115 510 125 S625 80 690 92 S760 50 800 43 L800 260L0 260Z"/><path className="trend-line" d="M0 205 C80 195 110 185 170 188 S260 143 330 153 S440 115 510 125 S625 80 690 92 S760 50 800 43"/><circle cx="800" cy="43" r="5"/></svg><div className="x-axis"><span>Jun 19</span><span>Jun 25</span><span>Jul 1</span><span>Jul 7</span><span>Jul 13</span><span>Jul 19</span></div></div></article>
    <article className="panel engine-panel"><PanelHead title="Visibility by engine" sub="Last 30 days"/>{demoEngines.map(e=><div className="engine-row" key={e.name}><span className={`engine-logo ${e.color}`}>{e.short}</span><div><b>{e.name}</b><i><span style={{width:e.score+"%"}}/></i></div><strong>{e.score}%</strong></div>)}<button className="panel-link" onClick={()=>setSection("prompts")}>View prompt details <ArrowUpRight/></button></article>
@@ -280,6 +288,7 @@ function Overview({demo,brand,refreshKey,scan,scanning,setSection,firstName}:{de
   {overviewTab==="traffic"&&<GscTrafficTab demo brandId={undefined}/>}
   {overviewTab==="rankings"&&<RankingsDetail demo answers={[]}/>}
  </>;
+ }
 
  if(!brand)return <>{header}{tabBar}<EmptyState icon={LayoutDashboard} headline="Your AI visibility score lands here" subtext="Add a client to start tracking how AI engines talk about your brand." primaryLabel="Add a client" onPrimary={()=>setSection("settings")}/></>;
  if(loading)return <>{header}{tabBar}<p>Loading…</p></>;
@@ -516,6 +525,7 @@ function ScoreHero({score,trend,confidence,delta,sparkData}:{score:number|string
    </div>
   </div>
   {sparkData&&sparkData.length>=2&&<div style={{marginLeft:"auto",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"8px"}}><Sparkline data={sparkData}/>{showDelta&&<span style={{fontSize:"20px",fontWeight:700,fontFamily:"Outfit,system-ui",color:deltaColor,letterSpacing:"-0.5px"}}>{deltaSign}{delta} pts vs last scan</span>}{sparkData.length>0&&<span style={{fontSize:"11px",color:"var(--muted,#64748B)"}}>{sparkData.length} scan{sparkData.length!==1?"s":""} tracked</span>}</div>}
+  {sparkData&&sparkData.length<2&&<div style={{marginLeft:"auto",textAlign:"right",maxWidth:"160px"}}><span style={{fontSize:"11px",color:"var(--muted,#64748B)",lineHeight:1.5}}>{sparkData.length===0?"No scans in this range":"Only 1 scan in this range"} — try a wider window to see a trend</span></div>}
   {trend&&!sparkData&&<div style={{marginLeft:"auto",textAlign:"right"}}><span style={{display:"block",fontSize:"28px",fontWeight:700,fontFamily:"Outfit,system-ui",color:"var(--em,#10B981)",letterSpacing:"-1px"}}>↑{trend}</span><span style={{fontSize:"12px",color:"var(--muted,#64748B)"}}>vs last period</span></div>}
  </div>;
 }
@@ -1051,6 +1061,25 @@ const FIX_STATUS_LABEL:Record<string,string>={all:"All fixes",pending:"Pending",
 // Status-change history comes from the audit log (#3 in session_notes), not the fixes table
 // itself -- fixes only ever store their current status, so without the log there'd be no way
 // to show "moved from pending to implementing on [date]", only the end state.
+function FixProgressRow({f,timeline,scanDate}:{f:{id:string;category:string;title:string;status:string;generated:string};timeline:{fromStatus:string|null;toStatus:string;createdAt:string}[];scanDate:string|null}){
+ return <article className="panel" style={{padding:"18px 20px"}}>
+  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:"12px",marginBottom:"8px"}}>
+   <div><span className={`fix-type ${fixCategoryClass(f.category)}`}>{FIX_CATEGORY_LABEL[f.category]||f.category}</span><h3 style={{margin:"6px 0 0",font:"700 14px 'Outfit',system-ui",color:"var(--ink)"}}>{f.title}</h3></div>
+   <span style={{fontSize:"10.5px",fontWeight:700,padding:"4px 10px",borderRadius:"99px",flexShrink:0,background:f.status==="done"?"var(--em-d)":f.status==="implementing"?"var(--sky-d)":"var(--soft)",color:f.status==="done"?"var(--em)":f.status==="implementing"?"var(--sky)":"var(--muted)"}}>{fixStatusLabel[f.status]||f.status}</span>
+  </div>
+  <div style={{display:"flex",gap:"18px",fontSize:"11.5px",color:"var(--muted)",marginBottom:"12px"}}>
+   <span>Generated <b style={{color:"var(--ink)"}}>{formatTimestamp(f.generated,"datetime")}</b></span>
+   <span>From scan <b style={{color:"var(--ink)"}}>{scanDate?formatTimestamp(scanDate,"datetime"):"Not linked to a scan"}</b></span>
+  </div>
+  <div style={{borderTop:"1px solid var(--line)",paddingTop:"10px",display:"grid",gap:"6px"}}>
+   {timeline.length===0
+    ?<div style={{fontSize:"11.5px",color:"var(--muted)"}}>No status changes recorded yet.</div>
+    :timeline.map((t,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:"8px",fontSize:"11.5px",color:"var(--muted)"}}><span style={{width:"6px",height:"6px",borderRadius:"50%",background:t.toStatus==="done"?"var(--em)":t.toStatus==="implementing"?"var(--sky)":"var(--faint)",flexShrink:0}}/>{t.fromStatus?`${fixStatusLabel[t.fromStatus]||t.fromStatus} → ${fixStatusLabel[t.toStatus]||t.toStatus}`:`Generated as ${fixStatusLabel[t.toStatus]||t.toStatus}`} on {formatTimestamp(t.createdAt,"datetime")}</div>)}
+  </div>
+  {f.status!=="done"&&<p style={{fontSize:"11px",color:"var(--sky)",marginTop:"10px",paddingTop:"10px",borderTop:"1px dashed var(--line)"}}>Check back after your next scheduled scan to see if this moves forward.</p>}
+ </article>;
+}
+
 function FixesProgressReport({demo,brand}:{demo:boolean;brand?:Brand}){
  const [statusTab,setStatusTab]=useState<string>("all");
  const [fixes,setFixes]=useState<Fix[]>([]);
@@ -1083,29 +1112,37 @@ function FixesProgressReport({demo,brand}:{demo:boolean;brand?:Brand}){
  if(!demo&&loading)return <p>Loading…</p>;
  if(!demo&&!items.length)return <EmptyState icon={WandSparkles} headline="No fixes yet for this brand" subtext="Run a scan to generate AI fixes — their progress and status history will show up here." />;
 
+ function timelineFor(id:string){return demo?DEMO_FIX_TIMELINE[id]||[]:history[id]||[]}
+ function scanDateFor(f:{scanRunId:string|null}){return demo?"2026-08-04T09:10:00Z":(f.scanRunId?scanDates[f.scanRunId]:null)}
+ const exportedAt=new Date().toISOString();
+ const brandLabel=demo?"Acme Software":brand?.name||"";
+ const domainLabel=demo?"acme.co":brand?.domain||"";
+
  return <>
-  <div className="fix-cat-tabs">{FIX_STATUS_ORDER.map(s=><button key={s} className={statusTab===s?"fix-cat-tab active":"fix-cat-tab"} onClick={()=>setStatusTab(s)}><span className="dot" style={{background:s==="all"?"var(--muted)":s==="done"?"var(--em)":s==="implementing"?"var(--sky)":"var(--faint)"}}/>{FIX_STATUS_LABEL[s]}<span className="cnt">{counts[s]}</span></button>)}</div>
-  <div style={{display:"grid",gap:"10px"}}>
-   {shown.map(f=>{
-    const timeline=demo?DEMO_FIX_TIMELINE[f.id]||[]:history[f.id]||[];
-    const scanDate=demo?"2026-08-04T09:10:00Z":(f.scanRunId?scanDates[f.scanRunId]:null);
-    return <article className="panel" key={f.id} style={{padding:"18px 20px"}}>
-     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:"12px",marginBottom:"8px"}}>
-      <div><span className={`fix-type ${fixCategoryClass(f.category)}`}>{FIX_CATEGORY_LABEL[f.category]||f.category}</span><h3 style={{margin:"6px 0 0",font:"700 14px 'Outfit',system-ui",color:"var(--ink)"}}>{f.title}</h3></div>
-      <span style={{fontSize:"10.5px",fontWeight:700,padding:"4px 10px",borderRadius:"99px",flexShrink:0,background:f.status==="done"?"var(--em-d)":f.status==="implementing"?"var(--sky-d)":"var(--soft)",color:f.status==="done"?"var(--em)":f.status==="implementing"?"var(--sky)":"var(--muted)"}}>{fixStatusLabel[f.status]||f.status}</span>
-     </div>
-     <div style={{display:"flex",gap:"18px",fontSize:"11.5px",color:"var(--muted)",marginBottom:"12px"}}>
-      <span>Generated <b style={{color:"var(--ink)"}}>{formatTimestamp(f.generated,"datetime")}</b></span>
-      <span>From scan <b style={{color:"var(--ink)"}}>{scanDate?formatTimestamp(scanDate,"datetime"):"Not linked to a scan"}</b></span>
-     </div>
-     <div style={{borderTop:"1px solid var(--line)",paddingTop:"10px",display:"grid",gap:"6px"}}>
-      {timeline.length===0
-       ?<div style={{fontSize:"11.5px",color:"var(--muted)"}}>No status changes recorded yet.</div>
-       :timeline.map((t,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:"8px",fontSize:"11.5px",color:"var(--muted)"}}><span style={{width:"6px",height:"6px",borderRadius:"50%",background:t.toStatus==="done"?"var(--em)":t.toStatus==="implementing"?"var(--sky)":"var(--faint)",flexShrink:0}}/>{t.fromStatus?`${fixStatusLabel[t.fromStatus]||t.fromStatus} → ${fixStatusLabel[t.toStatus]||t.toStatus}`:`Generated as ${fixStatusLabel[t.toStatus]||t.toStatus}`} on {formatTimestamp(t.createdAt,"datetime")}</div>)}
-     </div>
-     {f.status!=="done"&&<p style={{fontSize:"11px",color:"var(--sky)",marginTop:"10px",paddingTop:"10px",borderTop:"1px dashed var(--line)"}}>Check back after your next scheduled scan to see if this moves forward.</p>}
-    </article>;
-   })}
+  <div className="no-print" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"12px",marginBottom:"14px",flexWrap:"wrap"}}>
+   <div className="fix-cat-tabs" style={{marginBottom:0}}>{FIX_STATUS_ORDER.map(s=><button key={s} className={statusTab===s?"fix-cat-tab active":"fix-cat-tab"} onClick={()=>setStatusTab(s)}><span className="dot" style={{background:s==="all"?"var(--muted)":s==="done"?"var(--em)":s==="implementing"?"var(--sky)":"var(--faint)"}}/>{FIX_STATUS_LABEL[s]}<span className="cnt">{counts[s]}</span></button>)}</div>
+   <button className="button" style={{fontSize:"12px",padding:"9px 16px"}} onClick={()=>window.print()}><FileText style={{width:"13px"}}/>Export PDF</button>
+  </div>
+  <div className="no-print" style={{display:"grid",gap:"10px"}}>
+   {shown.map(f=><FixProgressRow key={f.id} f={f} timeline={timelineFor(f.id)} scanDate={scanDateFor(f)}/>)}
+  </div>
+  {/* Always the complete, unfiltered list -- an export should hold up as a full record
+      regardless of which status tab happened to be active on screen when it was printed. */}
+  <div className="fpr-print-doc">
+   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",borderBottom:"2px solid var(--ink)",paddingBottom:"16px",marginBottom:"16px"}}>
+    <div>
+     <div style={{font:"700 14px 'Outfit',system-ui"}}>a<span style={{color:"var(--sky)"}}>askvisibleai</span></div>
+     <div style={{font:"700 20px 'Outfit',system-ui",margin:"10px 0 2px"}}>AI Fixes progress report</div>
+     <div style={{fontSize:"11.5px",color:"var(--muted)"}}>{brandLabel}{domainLabel&&` · ${domainLabel}`}</div>
+    </div>
+    <div style={{textAlign:"right",fontSize:"11px",color:"var(--muted)"}}>Exported {formatTimestamp(exportedAt,"datetime")}<br/>All fixes, all statuses</div>
+   </div>
+   <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",borderBottom:"1px solid var(--line)",marginBottom:"16px"}}>
+    {FIX_STATUS_ORDER.map((s,i)=><div key={s} style={{padding:"12px 16px",textAlign:"center",borderLeft:i>0?"1px solid var(--line)":undefined}}><b style={{display:"block",font:"800 24px 'Outfit',system-ui",color:s==="done"?"var(--em)":s==="implementing"?"var(--sky)":"var(--ink)"}}>{counts[s]}</b><span style={{fontSize:"10px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:".4px"}}>{s==="all"?"Total fixes":FIX_STATUS_LABEL[s]}</span></div>)}
+   </div>
+   <div style={{display:"grid",gap:"10px"}}>
+    {items.map(f=><FixProgressRow key={f.id} f={f} timeline={timelineFor(f.id)} scanDate={scanDateFor(f)}/>)}
+   </div>
   </div>
  </>;
 }

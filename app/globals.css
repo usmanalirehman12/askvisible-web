@@ -452,6 +452,14 @@ td .up,td .down{display:flex;align-items:center}td svg{width:12px}
 .rv-section{padding:24px 36px;border-bottom:1px solid var(--line)}
 .rv-section-title{font:700 11px 'Outfit',system-ui;letter-spacing:1.2px;text-transform:uppercase;color:var(--sky);margin-bottom:16px}
 .rv-footer{padding:20px 36px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);border-radius:0 0 14px 14px}
+/* AI Fixes progress report export -- always prints every fix regardless of the on-screen
+   status filter, so the on-screen filtered list (.no-print) is hidden and this dedicated,
+   unfiltered document (hidden on-screen, shown only in print) takes over. */
+.fpr-print-doc{display:none}
+@media print{
+  .overview-tabs,.fix-cat-tabs{display:none!important}
+  .fpr-print-doc{display:block!important}
+}
 /* Print / PDF export */
 @media print{
   .sidebar,.app-header,.page-title,.report-grid{display:none!important}
