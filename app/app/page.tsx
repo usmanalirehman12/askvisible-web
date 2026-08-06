@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Activity, AlertCircle, ArrowDownRight, ArrowLeft, ArrowUpRight, BarChart3, Bell, Building2, Check, ChevronDown, CircleHelp, Edit2, FileText, Gauge, Globe, LayoutDashboard, Link2, LoaderCircle, LogOut, Mail, Menu, MessageSquare, Moon, MoreHorizontal, Play, Plus, Radar, Search, Settings, Sparkles, Sun, Target, Trash2, TrendingUp, Users, WandSparkles, X } from "lucide-react";
 import { supabaseConfigured } from "@/lib/supabase/config";
 import type { Brand, Competitor, Fix, Prompt, WorkspaceContext } from "@/lib/data/types";
-import type { ScanAnswerRow, ShareOfVoiceRow } from "@/lib/data/stats";
+import type { CompetitiveGapRow, ScanAnswerRow, ShareOfVoiceRow } from "@/lib/data/stats";
 import { summarizeScan } from "@/lib/data/stats";
 import { formatTimestamp, isWithinDays } from "@/lib/format/datetime";
 import { compareToPrevious } from "@/lib/data/reportComparison";
@@ -1030,9 +1030,53 @@ function SeoAuditTab({demo,brand}:{demo:boolean;brand?:Brand}){
 // voice" percentage-bars panel is demo-only, because those percentages come from scan_runs/
 // answers, which aren't wired yet — showing real competitor names next to fabricated scores
 // would be worse than not showing the panel at all. It comes back once scan data is real.
+const DEMO_SOV_SENTIMENT:Record<string,{positive:number;neutral:number;negative:number}>={
+ "Acme Software":{positive:14,neutral:5,negative:1},"SearchPilot":{positive:11,neutral:4,negative:3},"Riverside Rivals":{positive:6,neutral:7,negative:2},"PromptWatch":{positive:3,neutral:4,negative:1}
+};
+const DEMO_GAPS:CompetitiveGapRow[]=[
+ {promptQuery:"Best AI visibility tools for SaaS companies",engine:"perplexity",competitors:["SearchPilot"]},
+ {promptQuery:"Top generative engine optimization platforms",engine:"perplexity",competitors:["SearchPilot","Riverside Rivals"]},
+ {promptQuery:"Tools to improve brand visibility in ChatGPT",engine:"openai",competitors:["SearchPilot"]},
+];
+function SentimentBreakdown({counts}:{counts:{positive:number;neutral:number;negative:number}}){
+ const total=counts.positive+counts.neutral+counts.negative;
+ if(!total)return <span style={{fontSize:"11px",color:"var(--faint)"}}>No sentiment data</span>;
+ return <span style={{display:"inline-flex",gap:"8px",alignItems:"center",fontSize:"11px"}}>
+  {counts.positive>0&&<span style={{color:"var(--em)"}}>●&nbsp;{counts.positive} positive</span>}
+  {counts.neutral>0&&<span style={{color:"var(--muted)"}}>●&nbsp;{counts.neutral} neutral</span>}
+  {counts.negative>0&&<span style={{color:"var(--cr)"}}>●&nbsp;{counts.negative} negative</span>}
+ </span>;
+}
+// Groups gap rows by which competitor(s) won the prompt, so the panel reads as "here's who
+// to displace and where" rather than a flat list of missed prompts (that's already the
+// Overview "Missed prompts" count -- this is the competitive-relative version of it).
+function GapAnalysisPanel({gaps,brandName}:{gaps:CompetitiveGapRow[];brandName:string}){
+ if(!gaps.length)return null;
+ const byCompetitor=new Map<string,CompetitiveGapRow[]>();
+ for(const g of gaps)for(const c of g.competitors){if(!byCompetitor.has(c))byCompetitor.set(c,[]);byCompetitor.get(c)!.push(g)}
+ const sorted=[...byCompetitor.entries()].sort((a,b)=>b[1].length-a[1].length);
+ return <article className="panel" style={{marginTop:"14px"}}>
+  <PanelHead title="Gap analysis & opportunities" sub={`Prompts where ${brandName} wasn't named but a tracked competitor was`}/>
+  <div style={{display:"grid",gap:"14px"}}>
+   {sorted.map(([competitor,rows])=><div key={competitor}>
+    <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"8px"}}>
+     <span style={{fontSize:"13px",fontWeight:700,color:"var(--ink)"}}>{competitor}</span>
+     <span style={{fontSize:"10px",fontWeight:700,padding:"2px 8px",borderRadius:"99px",background:"var(--sky-d)",color:"var(--sky)"}}>{rows.length} prompt{rows.length!==1?"s":""}</span>
+    </div>
+    <div style={{display:"grid",gap:"6px"}}>
+     {rows.map((g,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"12px",padding:"9px 12px",border:"1px solid var(--line)",borderRadius:"7px",fontSize:"12px"}}>
+      <span style={{color:"var(--ink)"}}>{g.promptQuery}</span>
+      <span style={{color:"var(--muted)",flexShrink:0,fontSize:"11px"}}>{engineByKey[g.engine]?.name||g.engine}</span>
+     </div>)}
+    </div>
+   </div>)}
+  </div>
+ </article>;
+}
 function Competitors({demo,brand,newUser}:{demo:boolean;brand?:Brand;newUser:boolean}){
  const [items,setItems]=useState<Competitor[]>([]);
  const [sov,setSov]=useState<ShareOfVoiceRow[]>([]);
+ const [gaps,setGaps]=useState<CompetitiveGapRow[]>([]);
  const [scanned,setScanned]=useState(false);
  const [loading,setLoading]=useState(!demo);
  const [modal,setModal]=useState(false),[name,setName]=useState(""),[domain,setDomain]=useState(""),[saving,setSaving]=useState(false),[error,setError]=useState("");
@@ -1042,7 +1086,7 @@ function Competitors({demo,brand,newUser}:{demo:boolean;brand?:Brand;newUser:boo
   let cancelled=false;
   (async()=>{
    setLoading(true);
-   const [{createClient},{getCompetitors},{getLatestScan,shareOfVoice}]=await Promise.all([import("@/lib/supabase/client"),import("@/lib/data/competitors"),import("@/lib/data/stats")]);
+   const [{createClient},{getCompetitors},{getLatestScan,shareOfVoice,competitiveGaps}]=await Promise.all([import("@/lib/supabase/client"),import("@/lib/data/competitors"),import("@/lib/data/stats")]);
    const supabase=createClient();
    const [rows,scan]=await Promise.all([getCompetitors(supabase,brand.id),getLatestScan(supabase,brand.id)]);
    if(cancelled)return;
@@ -1050,6 +1094,7 @@ function Competitors({demo,brand,newUser}:{demo:boolean;brand?:Brand;newUser:boo
    // Competitors added after the last scan have no data yet, so they're filtered out of
    // the chart rather than shown at a misleading 0%.
    setSov(scan?shareOfVoice(scan,brand.name).filter(r=>r.isBrand||rows.some(c=>c.name===r.name)):[]);
+   setGaps(scan?competitiveGaps(scan):[]);
    setLoading(false);
   })();
   return ()=>{cancelled=true};
@@ -1066,7 +1111,8 @@ function Competitors({demo,brand,newUser}:{demo:boolean;brand?:Brand;newUser:boo
   finally{setSaving(false)}
  }
 
- if(demo)return <><div className="page-title"><div><span className="overline">LOCAL COMPETITIVE INTELLIGENCE</span><h1>Competitors near you</h1><p>See which nearby businesses in your category AI recommends instead of you—and what makes them win.</p></div><button className="scan-btn"><Plus/>Add a local competitor</button></div><div className="competitor-grid">{[{n:"SearchPilot",s:72,c:"SP",d:5},{n:"Riverside Rivals",s:64,c:"RR",d:-2},{n:"PromptWatch",s:49,c:"PW",d:8}].map(x=><article className="panel competitor-card" key={x.n}><span>{x.c}</span><div><h3>{x.n}</h3><p>Visibility score</p></div><b>{x.s}%</b><small className={x.d>0?"up":"down"}>{x.d>0?<ArrowUpRight/>:<ArrowDownRight/>}{Math.abs(x.d)}%</small><button><MoreHorizontal/></button></article>)}</div><article className="panel"><PanelHead title="Share of AI voice" sub="Mention frequency across tracked prompts, vs. competitors in your area"/><div className="share-bars">{[{n:"Acme Software",v:67},{n:"SearchPilot",v:72},{n:"Riverside Rivals",v:64},{n:"PromptWatch",v:49}].map(x=><div key={x.n}><span>{x.n}</span><i><b style={{width:x.v+"%"}}/></i><strong>{x.v}%</strong></div>)}</div></article></>;
+ if(demo)return <><div className="page-title"><div><span className="overline">LOCAL COMPETITIVE INTELLIGENCE</span><h1>Competitors near you</h1><p>See which nearby businesses in your category AI recommends instead of you—and what makes them win.</p></div><button className="scan-btn"><Plus/>Add a local competitor</button></div><div className="competitor-grid">{[{n:"SearchPilot",s:72,c:"SP",d:5},{n:"Riverside Rivals",s:64,c:"RR",d:-2},{n:"PromptWatch",s:49,c:"PW",d:8}].map(x=><article className="panel competitor-card" key={x.n}><span>{x.c}</span><div><h3>{x.n}</h3><p>Visibility score</p></div><b>{x.s}%</b><small className={x.d>0?"up":"down"}>{x.d>0?<ArrowUpRight/>:<ArrowDownRight/>}{Math.abs(x.d)}%</small><button><MoreHorizontal/></button></article>)}</div><article className="panel"><PanelHead title="Share of AI voice" sub="Mention frequency across tracked prompts, vs. competitors in your area"/><div className="share-bars">{[{n:"Acme Software",v:67},{n:"SearchPilot",v:72},{n:"Riverside Rivals",v:64},{n:"PromptWatch",v:49}].map(x=><div key={x.n}><span>{x.n}</span><i><b style={{width:x.v+"%"}}/></i><strong>{x.v}%</strong></div>)}</div><div style={{display:"grid",gap:"8px",marginTop:"14px",paddingTop:"14px",borderTop:"1px solid var(--line)"}}>{Object.entries(DEMO_SOV_SENTIMENT).map(([n,c])=><div key={n} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:"12px"}}><span style={{color:"var(--ink)",fontWeight:600}}>{n}</span><SentimentBreakdown counts={c}/></div>)}</div></article>
+  <GapAnalysisPanel gaps={DEMO_GAPS} brandName="Acme Software"/></>;
 
  if(!brand)return <div className="page-title"><div><span className="overline">LOCAL COMPETITIVE INTELLIGENCE</span><h1>Competitors near you</h1><p>Add a client brand first, then track the local competitors AI recommends instead of them.</p></div></div>;
 
@@ -1076,8 +1122,10 @@ function Competitors({demo,brand,newUser}:{demo:boolean;brand?:Brand;newUser:boo
   <article className="panel"><PanelHead title="Share of AI voice" sub={sov.length?`How often each brand is named across the ${sov[0].total} answers in the latest scan`:"Run a scan to see who AI names for your prompts"}/>
    {sov.length===0?<p className="muted-note">{scanned?"The latest scan ran before competitor tracking was added. Run a new scan to compare.":`No scan yet for ${brand.name}.`}</p>
    :<><div className="share-bars">{sov.map(r=><div key={r.name}><span>{r.name}{r.isBrand?" (you)":""}</span><i><b style={{width:r.share+"%"}}/></i><strong>{r.share}%</strong></div>)}</div>
-   <p className="muted-note">Shares don&apos;t total 100% — one answer can name several brands, and being listed alongside a rival is the normal case. {sov.filter(r=>r.avgPosition!=null).length>0&&`Average position when named: ${sov.filter(r=>r.avgPosition!=null).map(r=>`${r.name} ${r.avgPosition}`).join(", ")}.`}</p></>}
-  </article></>}
+   <p className="muted-note">Shares don&apos;t total 100% — one answer can name several brands, and being listed alongside a rival is the normal case. {sov.filter(r=>r.avgPosition!=null).length>0&&`Average position when named: ${sov.filter(r=>r.avgPosition!=null).map(r=>`${r.name} ${r.avgPosition}`).join(", ")}.`}</p>
+   <div style={{display:"grid",gap:"8px",marginTop:"14px",paddingTop:"14px",borderTop:"1px solid var(--line)"}}>{sov.map(r=><div key={r.name} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:"12px",flexWrap:"wrap",gap:"6px"}}><span style={{color:"var(--ink)",fontWeight:600}}>{r.name}{r.isBrand?" (you)":""}</span><SentimentBreakdown counts={r.sentimentCounts}/></div>)}</div></>}
+  </article>
+  <GapAnalysisPanel gaps={gaps} brandName={brand.name}/></>}
   {modal&&<div className="modal-back"><div className="modal"><button className="modal-x" onClick={()=>setModal(false)}><X/></button><span className="feature-icon"><Users/></span><h2>Add a local competitor</h2><p>Who else near {brand.name} shows up for these questions?</p>
    <form onSubmit={addCompetitor}>
     <label>Competitor name<input required autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Riverside Plumbing Co."/></label>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shareOfVoice, summarizeScan, type LatestScan, type ScanAnswerRow } from "./stats";
+import { competitiveGaps, shareOfVoice, summarizeScan, type LatestScan, type ScanAnswerRow } from "./stats";
 
 const row = (over: Partial<ScanAnswerRow> = {}): ScanAnswerRow => ({
   id: "a1",
@@ -127,5 +127,53 @@ describe("shareOfVoice", () => {
       row({ brand_mentioned: false, competitor_mentions: [comp("Rival", true)] })
     ]), "Acme");
     expect(result.map(r => r.name)).toEqual(["Rival", "Acme"]);
+  });
+
+  it("tallies sentiment counts only for mentioned instances with a known sentiment", () => {
+    const result = shareOfVoice(scan([
+      row({ sentiment: "positive", competitor_mentions: [{ name: "Rival", mentioned: true, position: 1, sentiment: "negative" }] }),
+      row({ sentiment: "positive", competitor_mentions: [{ name: "Rival", mentioned: true, position: 2, sentiment: "negative" }] }),
+      row({ brand_mentioned: false, sentiment: "not-mentioned", competitor_mentions: [{ name: "Rival", mentioned: false, position: null }] })
+    ]), "Acme");
+    expect(result.find(r => r.name === "Acme")!.sentimentCounts).toEqual({ positive: 2, neutral: 0, negative: 0 });
+    expect(result.find(r => r.name === "Rival")!.sentimentCounts).toEqual({ positive: 0, neutral: 0, negative: 2 });
+  });
+
+  it("doesn't tally sentiment for a competitor mention that predates sentiment tracking", () => {
+    const result = shareOfVoice(scan([row({ competitor_mentions: [comp("Rival", true, 1)] })]), "Acme");
+    expect(result.find(r => r.name === "Rival")!.sentimentCounts).toEqual({ positive: 0, neutral: 0, negative: 0 });
+  });
+});
+
+describe("competitiveGaps", () => {
+  const comp = (name: string, mentioned: boolean) => ({ name, mentioned, position: null });
+
+  it("returns nothing when the brand is mentioned", () => {
+    expect(competitiveGaps(scan([row({ competitor_mentions: [comp("Rival", true)] })]))).toEqual([]);
+  });
+
+  it("returns nothing when the brand is missed but nobody else was named", () => {
+    const result = competitiveGaps(scan([row({ brand_mentioned: false, competitor_mentions: [comp("Rival", false)] })]));
+    expect(result).toEqual([]);
+  });
+
+  it("returns nothing for an answer with no competitor_mentions at all", () => {
+    expect(competitiveGaps(scan([row({ brand_mentioned: false, competitor_mentions: null })]))).toEqual([]);
+  });
+
+  it("flags a missed prompt where a competitor was named, with prompt/engine/competitor names", () => {
+    const result = competitiveGaps(scan([row({
+      brand_mentioned: false, engine: "openai", prompts: { query: "best widgets" },
+      competitor_mentions: [comp("Rival", true), comp("Ghost", false)]
+    })]));
+    expect(result).toEqual([{ promptQuery: "best widgets", engine: "openai", competitors: ["Rival"] }]);
+  });
+
+  it("includes every mentioned competitor for a single missed prompt", () => {
+    const result = competitiveGaps(scan([row({
+      brand_mentioned: false,
+      competitor_mentions: [comp("Rival", true), comp("Other", true)]
+    })]));
+    expect(result[0].competitors).toEqual(["Rival", "Other"]);
   });
 });

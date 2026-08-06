@@ -2,12 +2,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { score } from "@/lib/ai/scoring";
 
 // Shape of one entry in answers.competitor_mentions, written by /api/scan/prompt.
-// Not exported: only ScanAnswerRow below refers to it.
+// Not exported: only ScanAnswerRow below refers to it. sentiment is optional because
+// answers scanned before competitor sentiment was tracked have rows without it.
 type CompetitorMentionRow = {
   id?: string;
   name: string;
   mentioned: boolean;
   position: number | null;
+  sentiment?: "positive" | "neutral" | "negative" | "not-mentioned";
 };
 
 export type ScanAnswerRow = {
@@ -28,6 +30,7 @@ export type ShareOfVoiceRow = {
   total: number;
   share: number;
   avgPosition: number | null;
+  sentimentCounts: { positive: number; neutral: number; negative: number };
 };
 
 export type LatestScan = {
@@ -75,19 +78,20 @@ export function shareOfVoice(scan: LatestScan, brandName: string): ShareOfVoiceR
   const total = scan.answers.length;
   if (!total) return [];
 
-  const rows = new Map<string, { mentions: number; positions: number[] }>();
-  const bump = (name: string, mentioned: boolean, position: number | null) => {
-    const row = rows.get(name) || { mentions: 0, positions: [] };
+  const rows = new Map<string, { mentions: number; positions: number[]; sentimentCounts: { positive: number; neutral: number; negative: number } }>();
+  const bump = (name: string, mentioned: boolean, position: number | null, sentiment?: string) => {
+    const row = rows.get(name) || { mentions: 0, positions: [], sentimentCounts: { positive: 0, neutral: 0, negative: 0 } };
     if (mentioned) {
       row.mentions++;
       if (position != null) row.positions.push(position);
+      if (sentiment === "positive" || sentiment === "neutral" || sentiment === "negative") row.sentimentCounts[sentiment]++;
     }
     rows.set(name, row);
   };
 
   for (const answer of scan.answers) {
-    bump(brandName, answer.brand_mentioned, answer.position);
-    for (const competitor of answer.competitor_mentions || []) bump(competitor.name, competitor.mentioned, competitor.position);
+    bump(brandName, answer.brand_mentioned, answer.position, answer.sentiment);
+    for (const competitor of answer.competitor_mentions || []) bump(competitor.name, competitor.mentioned, competitor.position, competitor.sentiment);
   }
 
   return [...rows.entries()]
@@ -97,11 +101,31 @@ export function shareOfVoice(scan: LatestScan, brandName: string): ShareOfVoiceR
       mentions: row.mentions,
       total,
       share: Math.round((row.mentions / total) * 100),
-      avgPosition: row.positions.length ? Math.round((row.positions.reduce((s, p) => s + p, 0) / row.positions.length) * 10) / 10 : null
+      avgPosition: row.positions.length ? Math.round((row.positions.reduce((s, p) => s + p, 0) / row.positions.length) * 10) / 10 : null,
+      sentimentCounts: row.sentimentCounts
     }))
     // Most-mentioned first; the brand wins ties so it never looks buried by a competitor
     // on equal footing. Alphabetical last so the order is stable between renders.
     .sort((a, b) => b.mentions - a.mentions || Number(b.isBrand) - Number(a.isBrand) || a.name.localeCompare(b.name));
+}
+
+export type CompetitiveGapRow = { promptQuery: string; engine: string; competitors: string[] };
+
+// The actionable half of "missed prompts": not just "we weren't named here" but "here's
+// specifically who was named instead." Reuses the same per-answer competitor_mentions data
+// shareOfVoice already reads -- no new AI calls, no schema change. An answer that named
+// nobody (competitor_mentions all unmentioned, or empty/predates tracking) isn't a gap,
+// it's just a prompt nobody won -- excluded so this stays "opportunities to displace a
+// named competitor," not a duplicate of the missed-prompts count.
+export function competitiveGaps(scan: LatestScan): CompetitiveGapRow[] {
+  const rows: CompetitiveGapRow[] = [];
+  for (const answer of scan.answers) {
+    if (answer.brand_mentioned) continue;
+    const competitors = (answer.competitor_mentions || []).filter(c => c.mentioned).map(c => c.name);
+    if (!competitors.length) continue;
+    rows.push({ promptQuery: answer.prompts?.query || "—", engine: answer.engine, competitors });
+  }
+  return rows;
 }
 
 export function summarizeScan(scan: LatestScan) {
