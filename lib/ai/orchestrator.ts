@@ -1,22 +1,8 @@
 import { configuredProviders } from "./providers";
 import { discoverBrand, generateBuyerPrompts } from "./website";
 import { score } from "./scoring";
+import { analyzeMention } from "./analyze";
 import type { AnalyzedAnswer, ProviderFailure, VisibilityResult } from "./types";
-
-function escaped(value:string){return value.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}
-function analyze(text:string, brand:string, domain:string): Pick<AnalyzedAnswer,"mentioned"|"position"|"sentiment"> {
-  const aliases=[brand,domain,domain.split(".")[0]].filter(x=>x.length>2);
-  const matcher=new RegExp(`\\b(?:${aliases.map(escaped).join("|")})\\b`,"i");
-  const mentioned=matcher.test(text);
-  if(!mentioned)return{mentioned:false,position:null,sentiment:"not-mentioned"};
-  const before=text.slice(0,text.search(matcher));
-  const numbered=[...text.matchAll(/(?:^|\n)\s*(?:#{1,4}\s*)?(\d+)[.)]\s+/g)];
-  const position=numbered.filter(m=>m.index!<before.length).at(-1)?.[1];
-  const hit=text.slice(Math.max(0,text.search(matcher)-120),text.search(matcher)+brand.length+180).toLowerCase();
-  const negative=/\b(drawback|weak|limited|expensive|poor|avoid|however|but)\b/.test(hit);
-  const positive=/\b(best|leading|strong|excellent|recommend|powerful|ideal|top)\b/.test(hit);
-  return{mentioned:true,position:position?Number(position):null,sentiment:negative&&!positive?"negative":positive?"positive":"neutral"};
-}
 // Confidence blends two signals: completeness (did every configured provider answer every
 // prompt, or did some calls fail/get skipped) and cross-provider agreement (when multiple
 // engines check the same prompt, do they agree on whether the brand was mentioned). A score
@@ -49,7 +35,10 @@ export async function runScanForPrompts(brand:{name:string;domain:string},prompt
   // are dropped rather than blocking the whole scan.
   const settled=(await Promise.all(providers.flatMap(provider=>prompts.map(async prompt=>{try{return{ok:true as const,value:await provider.run(prompt)}}catch(error){return{ok:false as const,failure:{provider:provider.name,prompt,error:error instanceof Error?error.message:"Provider request failed"} satisfies ProviderFailure}}})))).flat();
   const failures=settled.filter(x=>!x.ok).map(x=>x.failure); const raw=settled.filter(x=>x.ok).map(x=>x.value);
-  const answers=raw.map(a=>({...a,...analyze(a.text,brand.name,brand.domain)}));
+  // Shares analyzeMention with the authenticated scan path (this used to be a private,
+  // strictly worse copy with a fixed character window and no hedge/echo detection).
+  // a.prompt is the question this answer came from, so echoes of it don't count as mentions.
+  const answers=raw.map(a=>({...a,...analyzeMention(a.text,brand.name,brand.domain,[],a.prompt)}));
   if(!answers.length)throw new Error(`All configured providers failed: ${failures.map(f=>`${f.provider}: ${f.error}`).join("; ")}`);
   const mentions=answers.filter(a=>a.mentioned).length; const visibilityScore=score(answers); const opportunities=new Set(answers.filter(a=>!a.mentioned).map(a=>a.prompt)).size;
   const confidenceScore=confidence(answers,prompts,providers.length);

@@ -23,6 +23,11 @@ export type AnalyzedAnswer = ProviderAnswer & {
   mentioned: boolean;
   position: number | null;
   sentiment: "positive" | "neutral" | "negative" | "not-mentioned";
+  // Optional: set by analyzeMention, absent on rows analyzed before prompt-echo detection.
+  // brandKnown === false means the engine echoed the name from the question or openly said
+  // it didn't recognise the brand — see lib/ai/analyze.ts.
+  brandKnown?: boolean;
+  reason?: "substantive" | "hedged" | "echo-only" | "absent";
 };
 
 export type ProviderFailure = {

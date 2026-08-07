@@ -713,6 +713,26 @@ function SentimentPhrasesPanel({phrases}:{phrases:SentimentPhraseRow[]}){
   </div>
  </article>;
 }
+// The most actionable finding for a brand the models have never heard of. Engines listed
+// here echoed the brand name straight out of the question, or said outright they couldn't
+// find it -- those answers no longer count as mentions, and this is what explains the score.
+// Amber, not red: this is a diagnosis, not an error.
+function UnrecognizedBrandPanel({engines,brandName}:{engines:string[];brandName:string}){
+ if(!engines.length)return null;
+ const names=engines.map(e=>engineByKey[e]?.name||e);
+ const list=names.length>1?`${names.slice(0,-1).join(", ")} and ${names[names.length-1]}`:names[0];
+ return <article className="panel" style={{marginBottom:"14px",borderLeft:"4px solid var(--am)"}}>
+  <div style={{display:"flex",gap:"12px",alignItems:"flex-start"}}>
+   <AlertCircle size={18} style={{color:"var(--am)",flexShrink:0,marginTop:"2px"}}/>
+   <div style={{minWidth:0}}>
+    <h3 style={{margin:"0 0 6px",font:"700 14px 'Outfit',system-ui",color:"var(--ink)"}}>{engines.length} of 6 engines don&apos;t recognize {brandName||"your brand"}</h3>
+    <p style={{margin:0,fontSize:"12.5px",color:"var(--muted)",lineHeight:1.6}}>
+     {list} repeated your brand name back from the question but had no actual knowledge of it — they guessed at what you do. These aren&apos;t counted as mentions. Getting cited on pages these models train on is the fix.
+    </p>
+   </div>
+  </div>
+ </article>;
+}
 function highlightMentions(text:string,needle:string):React.ReactNode{
  if(!needle.trim())return text;
  const re=new RegExp(`(${needle.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")})`,"gi");
@@ -774,6 +794,7 @@ function Answers({demo,brand,refreshKey,scan,scanning,newUser}:{demo:boolean;bra
  const phrases=commonSentimentPhrases(report.answers,report.brand.name,report.brand.domain);
 
  return <>{header}
+  <UnrecognizedBrandPanel engines={report.unrecognizedEngines||[]} brandName={report.brand.name}/>
   <SentimentPhrasesPanel phrases={phrases}/>
   <div className="filterbar" style={{marginBottom:"14px"}}>
    <select value={engineFilter} onChange={e=>setEngineFilter(e.target.value)} style={{fontSize:"12px",padding:"7px 10px",borderRadius:"7px",border:"1px solid var(--line)",background:"var(--surface)",color:"var(--ink)"}}>
@@ -794,11 +815,14 @@ function Answers({demo,brand,refreshKey,scan,scanning,newUser}:{demo:boolean;bra
       <td><ChevronDown style={{width:"14px",color:"var(--faint)",transition:"transform .15s",transform:open?"rotate(0deg)":"rotate(-90deg)"}}/></td>
       <td><b>{a.prompt}</b></td>
       <td>{engineByKey[a.engine]?.name||a.engine}</td>
-      <td><span className={a.brand_mentioned?"status yes":"status no"}>{a.brand_mentioned?"Mentioned":"Not mentioned"}</span></td>
+      <td><span className={a.brand_mentioned?"status yes":"status no"}>{a.brand_mentioned?"Mentioned":"Not mentioned"}</span>{(a.reason==="hedged"||a.reason==="echo-only")&&<span title={a.reason==="hedged"?"This engine said it couldn't find your brand":"Your brand name appears only because the question contained it"} style={{marginLeft:"6px",fontSize:"9.5px",fontWeight:700,padding:"2px 6px",borderRadius:"4px",background:"var(--am-d,#FEF3C7)",color:"var(--am)",whiteSpace:"nowrap"}}>{a.reason==="hedged"?"Didn't recognize":"Echoed"}</span>}</td>
       <td>{a.position?`#${a.position}`:"—"}</td>
       <td>{a.sentiment==="not-mentioned"?"—":a.sentiment}</td>
      </tr>
      {open&&<tr><td></td><td colSpan={5} style={{background:"var(--soft)",padding:"14px 16px",fontSize:"12px",lineHeight:1.6,color:"var(--ink)",whiteSpace:"pre-wrap"}}>
+      {/* The highlight stays on an echoed name even though it no longer counts — hiding the
+          evidence would undermine this tab's whole purpose; the badge above explains it. */}
+      {(a.reason==="hedged"||a.reason==="echo-only")&&<div style={{marginBottom:"10px",padding:"8px 10px",borderRadius:"6px",background:"var(--am-d,#FEF3C7)",color:"var(--am)",fontSize:"11.5px",fontWeight:600,whiteSpace:"normal"}}>{a.reason==="hedged"?"This engine said it couldn't find information about your brand, so this isn't counted as a mention.":"Your brand name appears here only because the question asked about it — not because the engine recommended you. Not counted as a mention."}</div>}
       {a.text?highlightMentions(a.text,report.brand.name):<span style={{color:"var(--muted)",fontStyle:"italic"}}>No response text recorded for this answer — this can happen when a provider returned an empty or incomplete response.</span>}
       {a.createdAt&&<div style={{marginTop:"10px",fontSize:"11px",color:"var(--muted)"}}>Answered {formatTimestamp(a.createdAt,"datetime")}</div>}
      </td></tr>}
@@ -1185,7 +1209,8 @@ function Competitors({demo,brand,newUser}:{demo:boolean;brand?:Brand;newUser:boo
 type ReportDetail={
  run:{id:string;completedAt:string|null;confidence:number|null;score:number;mentions:number;total:number};
  brand:{name:string;domain:string};
- answers:{id:string;engine:string;text:string;brand_mentioned:boolean;position:number|null;sentiment:string;createdAt:string|null;prompt:string}[];
+ answers:{id:string;engine:string;text:string;brand_mentioned:boolean;position:number|null;sentiment:string;createdAt:string|null;prompt:string;brandKnown?:boolean|null;reason?:string|null}[];
+ unrecognizedEngines?:string[];
  fixes:{id:string;category:string;title:string;rationale:string|null;impact_low:number|null;impact_high:number|null;status:string;created_at?:string}[];
  seoAudit:{audit:SeoAuditData|null;previousAudit:{id:string;overallScore:number;createdAt:string}|null};
  traffic:GscData;

@@ -225,4 +225,42 @@ describe("commonSentimentPhrases", () => {
     expect(result[0]).toMatchObject({ phrase: "Acme is the best option.", count: 2 });
     expect(result[1]).toMatchObject({ phrase: "Acme is expensive.", count: 1 });
   });
+
+  it("counts phrases that differ only in markdown or casing as the same phrase", () => {
+    // Regression: the dedupe key was the raw lowercased snippet, so "**Acme** is the best"
+    // and "Acme is the Best" were distinct rows and every count came out as 1.
+    const answers = [
+      ans("**Acme** is the best option.", "positive"),
+      ans("Acme is the Best option.", "positive"),
+    ];
+    expect(commonSentimentPhrases(answers, "Acme", "")[0].count).toBe(2);
+  });
+
+  it("prefers the shorter phrase when counts tie", () => {
+    // Regression: the old tiebreak sorted longer-first, which promoted un-stripped
+    // markdown/table blobs above clean sentences.
+    const answers = [
+      ans("Acme is the best option for teams that need a lot of configurable reporting surface.", "positive"),
+      ans("Acme is excellent.", "positive"),
+    ];
+    expect(commonSentimentPhrases(answers, "Acme", "")[0].phrase).toBe("Acme is excellent.");
+  });
+
+  it("keeps opposing verdicts on the same sentence as separate rows", () => {
+    // Regression: first-writer-wins silently discarded the second sentiment.
+    const answers = [
+      ans("Acme is the best.", "positive"),
+      ans("Acme is the best.", "negative"),
+    ];
+    const result = commonSentimentPhrases(answers, "Acme", "");
+    expect(result).toHaveLength(2);
+    expect(result.map(r => r.sentiment).sort()).toEqual(["negative", "positive"]);
+  });
+
+  it("drops scaffolding even when a stale row still says brand_mentioned", () => {
+    // Defence in depth for answers stored before prompt-echo detection and not yet
+    // backfilled -- the snippet extractor rejects the echo regardless of the stored flag.
+    const answers = [ans("I'll break down the best alternatives to Acme.", "positive")];
+    expect(commonSentimentPhrases(answers, "Acme", "")).toEqual([]);
+  });
 });

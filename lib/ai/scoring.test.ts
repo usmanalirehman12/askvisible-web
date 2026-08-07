@@ -68,4 +68,17 @@ describe("score", () => {
     const withNoise = score([answer(), answer({ mentioned: false, position: 1, sentiment: "positive" })]);
     expect(withNoise).toBe(50);
   });
+
+  it("documents the cost of a single phantom mention", () => {
+    // Why scores dropped when prompt-echo detection shipped. A prompt-echo mention has no
+    // list position, and the unranked default (0.4) is worth as much as a genuine #4 finish,
+    // so one phantom mention in a 5-answer scan was carrying ~16 points on its own:
+    //   mention  60/5           = 12
+    //   position 0.4 * 25/5     = 2
+    //   sentiment 0.55 * 15/5   = 1.65   -> 15.65, rounds into a ~16 point swing.
+    const real = [answer(), answer(), answer(), answer()];
+    const withPhantom = score([...real, answer({ mentioned: true, position: null, sentiment: "neutral" })]);
+    const withoutPhantom = score([...real, answer({ mentioned: false, position: null, sentiment: "not-mentioned" })]);
+    expect(withPhantom - withoutPhantom).toBe(16);
+  });
 });

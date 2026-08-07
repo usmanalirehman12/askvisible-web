@@ -147,27 +147,41 @@ export function competitiveGaps(scan: LatestScan): CompetitiveGapRow[] {
 
 export type SentimentPhraseRow = { phrase: string; sentiment: "positive" | "negative"; count: number };
 
+// Dedupe key: markdown, casing and trailing punctuation used to make two renderings of the
+// same sentence distinct rows, so counts were nearly always 1 on real data.
+function normalizePhrase(phrase: string): string {
+  return phrase.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
 // "Common sentiment phrases": the actual sentence AI engines used around the brand mention,
 // deduped and counted across a scan's answers -- the qualitative complement to the
 // positive/neutral/negative sentiment score. Reuses raw_answer text that's already
-// persisted per answer (no new AI calls, no schema change) via extractMentionSnippet's
-// keyword-window matcher, the same one analyzeMention scores sentiment with. Neutral
-// mentions are excluded -- a bucket of neutral sentences isn't the actionable signal here,
-// a recurring "expensive" or "best-in-class" phrase is.
-export function commonSentimentPhrases(answers: { text: string; brand_mentioned: boolean; sentiment: string }[], brandName: string, brandDomain: string): SentimentPhraseRow[] {
+// persisted per answer (no new AI calls, no schema change) via extractMentionSnippet, which
+// shares its sentence boundaries with the sentiment classifier. Neutral mentions are
+// excluded -- a bucket of neutral sentences isn't the actionable signal here, a recurring
+// "expensive" or "best-in-class" phrase is. Passing each answer's own prompt keeps scaffolding
+// ("here are the best alternatives to X:") out of the panel entirely.
+export function commonSentimentPhrases(
+  answers: { text: string; brand_mentioned: boolean; sentiment: string; prompt?: string }[],
+  brandName: string,
+  brandDomain: string,
+  extraAliases: string[] = []
+): SentimentPhraseRow[] {
   const counts = new Map<string, { phrase: string; sentiment: "positive" | "negative"; count: number }>();
   for (const a of answers) {
     if (!a.brand_mentioned || (a.sentiment !== "positive" && a.sentiment !== "negative")) continue;
-    const snippet = extractMentionSnippet(a.text, brandName, brandDomain);
+    const snippet = extractMentionSnippet(a.text, brandName, brandDomain, extraAliases, 160, a.prompt || "");
     if (!snippet) continue;
-    const key = snippet.toLowerCase();
+    // Keyed by sentiment too: the same sentence arriving with opposing verdicts is a real
+    // signal worth showing as two rows, not something to silently collapse into the first.
+    const key = `${normalizePhrase(snippet)}|${a.sentiment}`;
     const existing = counts.get(key);
     if (existing) existing.count++;
     else counts.set(key, { phrase: snippet, sentiment: a.sentiment as "positive" | "negative", count: 1 });
   }
-  // Most-repeated first; ties broken by the longer (more specific) phrase so a generic
-  // fragment doesn't outrank a more informative one at equal count.
-  return [...counts.values()].sort((a, b) => b.count - a.count || b.phrase.length - a.phrase.length);
+  // Most-repeated first, then the shorter phrase -- the old longer-wins tiebreak actively
+  // promoted un-stripped markdown blobs over clean sentences.
+  return [...counts.values()].sort((a, b) => b.count - a.count || a.phrase.length - b.phrase.length);
 }
 
 export function summarizeScan(scan: LatestScan) {

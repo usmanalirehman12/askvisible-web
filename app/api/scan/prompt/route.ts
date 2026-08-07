@@ -28,11 +28,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ skipped: true, provider, reason });
     }
 
-    const analysis = analyzeMention(answer.text, brandName || "", brandDomain || "");
+    // The prompt is passed in so the analyzer can tell a real mention from the brand name
+    // being echoed straight back out of the question — 1 in 5 generated prompts is literally
+    // "alternatives to {brand}", so without this every scan booked phantom mentions.
+    const analysis = analyzeMention(answer.text, brandName || "", brandDomain || "", [], prompt);
     const citations = extractUrls(answer.text);
     // Same answer text, same matcher — so "we were named, they weren't" is a real
     // comparison rather than two scans run against different questions.
-    const competitorMentions = analyzeCompetitors(answer.text, Array.isArray(competitors) ? (competitors as CompetitorInput[]) : []);
+    const competitorMentions = analyzeCompetitors(answer.text, Array.isArray(competitors) ? (competitors as CompetitorInput[]) : [], prompt);
 
     const { error: ansErr } = await supabase.from("answers").insert({
       run_id: scanRunId,
